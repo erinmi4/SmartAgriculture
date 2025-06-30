@@ -42,7 +42,7 @@ void Led_On(uint16_t Led_Num)
     switch(Led_Num)
     {
         case 0: // LED1/LED0 (PF9)
-            GPIO_ResetBits(LED1_GPIO, LED1_PIN);
+            GPIO_ResetBits(LED0_GPIO, LED0_PIN);
             break;
         
         case 1: // LED2 (PF10)

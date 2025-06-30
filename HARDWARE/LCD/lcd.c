@@ -1,5 +1,43 @@
 #include "lcd.h"
-#include "delay.h"
+
+/**
+ * @brief 简单安全的延时函数
+ * @param count: 延时计数
+ * @retval 无
+ * @note 避免使用SysTick，防止系统冲突
+ */
+static void safe_delay(uint32_t count)
+{
+    volatile uint32_t i;
+    for(i = 0; i < count; i++)
+    {
+        __NOP();  // 空操作
+    }
+}
+
+/**
+ * @brief 毫秒级安全延时
+ * @param ms: 延时毫秒数
+ * @retval 无
+ */
+static void safe_delay_ms(uint32_t ms)
+{
+    uint32_t i;
+    for(i = 0; i < ms; i++)
+    {
+        safe_delay(84000);  // 根据系统时钟调整，这里假设84MHz
+    }
+}
+
+/**
+ * @brief 微秒级安全延时
+ * @param us: 延时微秒数
+ * @retval 无
+ */
+static void safe_delay_us(uint32_t us)
+{
+    safe_delay(us * 84);  // 根据系统时钟调整
+}
 
 /**
  * @brief LCD GPIO引脚初始化
@@ -97,19 +135,19 @@ void lcd_write_cmd(unsigned char cmd)
     GPIO_WriteBit(LCD_D7_PORT, LCD_D7_PIN, ((cmd >> 7) & 0x01) ? Bit_SET : Bit_RESET);  // D7
     
     // 3. 延时，让LCD准备接收数据
-    Udelay_Lib(2);
+    safe_delay_us(2);
     
     // 4. 将EN拉高，产生上升沿，LCD开始读取指令
     GPIO_WriteBit(LCD_EN_PORT, LCD_EN_PIN, Bit_SET);   // EN = 1
     
     // 5. 延时，保持EN高电平一段时间
-    Udelay_Lib(2);
+    safe_delay_us(2);
     
     // 6. 将EN拉低，产生下降沿，LCD完成指令读取
     GPIO_WriteBit(LCD_EN_PORT, LCD_EN_PIN, Bit_RESET); // EN = 0
     
     // 7. 延时，等待LCD执行指令
-    Udelay_Lib(50);  // 大部分指令需要37us执行时间
+    safe_delay_us(50);  // 大部分指令需要37us执行时间
 }
 
 /**
@@ -136,19 +174,19 @@ void lcd_write_dat(unsigned char dat)
     GPIO_WriteBit(LCD_D7_PORT, LCD_D7_PIN, ((dat >> 7) & 0x01) ? Bit_SET : Bit_RESET);  // D7
     
     // 3. 延时，让LCD准备接收数据
-    Udelay_Lib(2);
+    safe_delay_us(2);
     
     // 4. 将EN拉高，产生上升沿，LCD开始读取数据
     GPIO_WriteBit(LCD_EN_PORT, LCD_EN_PIN, Bit_SET);   // EN = 1
     
     // 5. 延时，保持EN高电平一段时间
-    Udelay_Lib(2);
+    safe_delay_us(2);
     
     // 6. 将EN拉低，产生下降沿，LCD完成数据读取
     GPIO_WriteBit(LCD_EN_PORT, LCD_EN_PIN, Bit_RESET); // EN = 0
     
     // 7. 延时，等待LCD处理数据
-    Udelay_Lib(50);
+    safe_delay_us(50);
 }
 
 /**
@@ -163,22 +201,29 @@ void lcd_init(void)
     lcd_gpio_init();
     
     // 2. 等待LCD上电稳定
-    Mdelay_Lib(15);  // 等待LCD上电稳定，至少15ms
+    safe_delay_ms(50);  // 增加延时确保稳定
     
-    // 3. LCD初始化序列
-    lcd_write_cmd(LCD_CMD_FUNCTION_SET);    // 0x38: 8位数据线，2行显示，5x7字符
-    Mdelay_Lib(5);                            // 等待4.1ms以上
+    // 3. LCD标准初始化序列
+    lcd_write_cmd(0x38);    // 功能设置：8位数据，2行显示，5x7字符
+    safe_delay_ms(5);
     
-    lcd_write_cmd(LCD_CMD_FUNCTION_SET);    // 再次发送功能设置指令
-    Udelay_Lib(100);                          // 等待100us以上
+    lcd_write_cmd(0x38);    // 再次发送
+    safe_delay_ms(1);
     
-    lcd_write_cmd(LCD_CMD_FUNCTION_SET);    // 第三次发送功能设置指令
+    lcd_write_cmd(0x38);    // 第三次发送
+    safe_delay_ms(1);
     
-    lcd_write_cmd(LCD_CMD_DISPLAY_CTRL);    // 0x0C: 显示开，光标关，闪烁关
-    lcd_write_cmd(LCD_CMD_CLEAR);           // 0x01: 清屏
-    Mdelay_Lib(2);                            // 清屏指令需要1.64ms执行时间
+    lcd_write_cmd(0x08);    // 显示关闭
+    safe_delay_ms(1);
     
-    lcd_write_cmd(LCD_CMD_ENTRY_MODE);      // 0x06: 输入模式设置，光标右移，显示器不移动
+    lcd_write_cmd(0x01);    // 清屏
+    safe_delay_ms(2);
+    
+    lcd_write_cmd(0x06);    // 输入模式设置
+    safe_delay_ms(1);
+    
+    lcd_write_cmd(0x0C);    // 显示开，光标关，闪烁关
+    safe_delay_ms(1);
 }
 
 /**
@@ -241,6 +286,6 @@ void lcd_print_char(unsigned char ch)
  */
 void lcd_clear(void)
 {
-    lcd_write_cmd(LCD_CMD_CLEAR);  // 发送清屏指令
-    Mdelay_Lib(2);                   // 等待清屏完成
+    lcd_write_cmd(0x01);  // 发送清屏指令
+    safe_delay_ms(2);     // 等待清屏完成
 }
