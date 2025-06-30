@@ -1,0 +1,27 @@
+{
+  "folders": [
+    {
+      "path": "."
+    }
+  ],
+  "settings": {
+    "files.associations": {
+      "*.h": "c",
+      "*.c": "c"
+    },
+    "C_Cpp.default.intelliSenseMode": "windows-gcc-x64",
+    "C_Cpp.default.includePath": [
+      "${workspaceFolder}/**",
+      "${workspaceFolder}/SYSTEM",
+      "${workspaceFolder}/CORE",
+      "${workspaceFolder}/FWLIB/inc",
+      "${workspaceFolder}/HARDWARE/**",
+      "${workspaceFolder}/USER"
+    ],
+    "C_Cpp.default.defines": [
+      "USE_STDPERIPH_DRIVER",
+      "STM32F40_41xxx"
+    ],
+    "C_Cpp.default.compilerPath": "E:/mingw/mingw64/bin/gcc.exe"
+  }
+}
