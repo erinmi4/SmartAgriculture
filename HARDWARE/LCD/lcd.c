@@ -1,3 +1,14 @@
+/**
+ * @file    lcd.c
+ * @brief   STM32F407 LCD1602驱动实现
+ * @author  Mika
+ * @date    2025-06-30
+ * @version 2.0
+ * 
+ * @note    使用安全的延时函数，避免SysTick冲突
+ *          系统时钟配置为168MHz，延时参数已优化
+ */
+
 #include "lcd.h"
 
 /**
@@ -19,13 +30,14 @@ static void safe_delay(uint32_t count)
  * @brief 毫秒级安全延时
  * @param ms: 延时毫秒数
  * @retval 无
+ * @note 根据STM32F407系统时钟168MHz优化
  */
 static void safe_delay_ms(uint32_t ms)
 {
     uint32_t i;
     for(i = 0; i < ms; i++)
     {
-        safe_delay(84000);  // 根据系统时钟调整，这里假设84MHz
+        safe_delay(168000);  // 假设系统时钟168MHz，调整这个值来校准延时
     }
 }
 
@@ -33,10 +45,11 @@ static void safe_delay_ms(uint32_t ms)
  * @brief 微秒级安全延时
  * @param us: 延时微秒数
  * @retval 无
+ * @note 根据STM32F407系统时钟168MHz优化
  */
 static void safe_delay_us(uint32_t us)
 {
-    safe_delay(us * 84);  // 根据系统时钟调整
+    safe_delay(us * 168);  // 假设系统时钟168MHz
 }
 
 /**
@@ -190,10 +203,11 @@ void lcd_write_dat(unsigned char dat)
 }
 
 /**
- * @brief LCD初始化
+ * @brief LCD安全初始化
  * @param 无
  * @retval 无
- * @note 按照HD44780标准初始化序列进行初始化
+ * @note 使用安全的延时，避免系统冲突
+ *       按照HD44780标准初始化序列进行初始化
  */
 void lcd_init(void)
 {
@@ -203,7 +217,7 @@ void lcd_init(void)
     // 2. 等待LCD上电稳定
     safe_delay_ms(50);  // 增加延时确保稳定
     
-    // 3. LCD标准初始化序列
+    // 3. LCD初始化序列（标准HD44780初始化）
     lcd_write_cmd(0x38);    // 功能设置：8位数据，2行显示，5x7字符
     safe_delay_ms(5);
     
