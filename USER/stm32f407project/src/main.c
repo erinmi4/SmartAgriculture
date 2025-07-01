@@ -1,48 +1,76 @@
 /**
  * @file    main.c
- * @brief   DHT11温湿度传感器主程序
- * @details 实时获取环境温湿度数据并显示在LCD1602上
+ * @brief   MQ-2烟雾传感器主程序
+ * @details 实时获取环境烟雾数据并显示在LCD1602上
+ * @note    本文件只调用模块接口函数，不包含底层实现细节
  */
 
 #include "stm32f4xx.h"
 #include "sys.h"
 #include "delay.h"
+#include "mq2.h"
 #include "lcd.h"
-#include "DHT11.h"
 #include <stdio.h>
 
 int main(void)
 {
-    unsigned char temp, humi;
-    char str[32];
-
-    // 初始化DHT11和LCD1602
-    dht11_init();
+    unsigned int smoke_value = 0;
+    
+    // 系统初始化
+    SystemInit();
+    
+    // 初始化MQ-2传感器模块
+    MQ2_Init();
+    
+    // 初始化LCD1602
     lcd_init();
-
-    while (1)
+    
+    // 显示启动信息
+    lcd_clear();
+    lcd_print_str(0, 0, "MQ-2 Starting...");
+    lcd_print_str(1, 0, "Please wait...");
+    Mdelay_Lib(2000);
+    
+    while(1)
     {
-        if (dht11_read_dat(&temp, &humi) == 0) // 成功读取数据
-        {
-            // 显示温度
-            lcd_gotoxy(0, 0); // 设置LCD光标位置
-            sprintf(str, "Temp: %d C", temp); // 格式化字符串
-            lcd_print_str(0, 0, str); // 显示温度
+        // 清除数据就绪标志
+        MQ2_ClearFlag();
+        
+        // 发送命令到MQ-2传感器
+        MQ2_SendCommand();
 
-            // 显示湿度
-            lcd_gotoxy(1, 0); // 设置LCD光标位置
-            sprintf(str, "Humi: %d %%", humi); // 格式化字符串
-            lcd_print_str(1, 0, str); // 显示湿度
+        // 等待传感器数据就绪
+        while(!MQ2_IsDataReady())
+        {
+            Mdelay_Lib(10); // 添加小延时避免死循环
+        }
+
+        // 获取烟雾浓度值
+        smoke_value = MQ2_GetValue();
+
+        // 在LCD上显示烟雾浓度
+        char str[32] = {0};
+        sprintf(str, "Smoke:%4d ppm", smoke_value);
+        lcd_print_str(0, 0, str);
+        
+        // 根据烟雾浓度显示状态
+        if(smoke_value < 100)
+        {
+            lcd_print_str(1, 0, "Status: Normal  ");
+        }
+        else if(smoke_value < 300)
+        {
+            lcd_print_str(1, 0, "Status: Low     ");
+        }
+        else if(smoke_value < 500)
+        {
+            lcd_print_str(1, 0, "Status: Medium  ");
         }
         else
         {
-            // 如果读取失败，显示错误信息
-            lcd_gotoxy(0, 0);
-            lcd_print_str(0, 0, "Read Error");
-            lcd_gotoxy(1, 0);
-            lcd_print_str(1, 0, "Check DHT11");
+            lcd_print_str(1, 0, "Status: HIGH!!! ");
         }
-
-        Mdelay_Lib(2000); // 每2秒读取一次
+        
+        Mdelay_Lib(2000); // 2秒后进行下一次检测
     }
 }

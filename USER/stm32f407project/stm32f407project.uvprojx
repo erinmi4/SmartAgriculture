@@ -365,7 +365,7 @@
               <MiscControls></MiscControls>
               <Define>STM32F40_41xxx,USE_STDPERIPH_DRIVER</Define>
               <Undefine></Undefine>
-              <IncludePath>..\..\CORE;..\..\FWLIB\inc;.\src;..\..\SYSTEM;..\..\HARDWARE\LED;..\..\MiddleWare\EXTI;..\..\HARDWARE\BEEP;..\..\HARDWARE\KEY;..\..\MiddleWare\UART;..\..\HARDWARE\LCD;..\..\HARDWARE\DHT11</IncludePath>
+              <IncludePath>..\..\CORE;..\..\FWLIB\inc;.\src;..\..\SYSTEM;..\..\HARDWARE\LED;..\..\MiddleWare\EXTI;..\..\HARDWARE\BEEP;..\..\HARDWARE\KEY;..\..\MiddleWare\UART;..\..\HARDWARE\LCD;..\..\HARDWARE\DHT11;..\..\HARDWARE\MQ</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -897,6 +897,16 @@
               <FileName>DHT11.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\..\HARDWARE\DHT11\DHT11.h</FilePath>
+            </File>
+            <File>
+              <FileName>mq2.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\HARDWARE\MQ\mq2.c</FilePath>
+            </File>
+            <File>
+              <FileName>mq2.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\HARDWARE\MQ\mq2.h</FilePath>
             </File>
           </Files>
         </Group>

@@ -483,7 +483,16 @@ void USART3_IRQHandler(void)
  */
 void UART_RxCallback(USART_TypeDef* USARTx, uint8_t ch)
 {
-    /* Echo received data back */
+    /* 处理USART3的MQ-2传感器数据 */
+    if(USARTx == USART3)
+    {
+        /* 调用MQ-2数据处理函数 */
+        extern void MQ2_ProcessData(uint8_t ch);
+        MQ2_ProcessData(ch);
+        return;  /* 直接返回，不进行echo */
+    }
+    
+    /* Echo received data back for other USARTs */
     UART_SendChar(USARTx, ch);
     
     /* Process USART1 data and control peripherals based on received character */
