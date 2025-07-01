@@ -1,28 +1,28 @@
 #include "light.h"
-#include "adc1.h" // <--- 已修改: 包含 adc1.h 而不是 ADC3.h
+#include "adc3.h" // <--- 已修改: 包含 adc3.h
 #include "delay.h"
 
 /**
  * @brief  光敏电阻初始化
  * @param  None
  * @retval None
- * @note   初始化正确的GPIO(PB1)和ADC1
+ * @note   初始化正确的GPIO(PF7)和ADC3
  */
 void Light_Init(void)
 {
     GPIO_InitTypeDef GPIO_InitStructure;
     
-    // 使能GPIOB时钟
+    // 使能GPIOF时钟
     RCC_AHB1PeriphClockCmd(LIGHT_GPIO_CLK, ENABLE);
     
-    // 配置PB1为模拟输入模式
+    // 配置PF7为模拟输入模式
     GPIO_InitStructure.GPIO_Pin = LIGHT_GPIO_PIN;
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AN;        // 模拟输入模式
     GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;    // 不上拉不下拉
     GPIO_Init(LIGHT_GPIO_PORT, &GPIO_InitStructure);
     
-    // 初始化ADC1
-    Adc1_Init(); // <--- 已修改: 调用 Adc1_Init()
+    // 初始化ADC3
+    Adc3_Init(); // <--- 已修改: 调用 Adc3_Init()
     
     // 短暂延时等待ADC稳定
     Mdelay_Lib(20);
@@ -35,8 +35,8 @@ void Light_Init(void)
  */
 uint16_t Light_GetRawValue(void)
 {
-    // <--- 已修改: 调用 Get_Adc1()
-    return Get_Adc1(LIGHT_ADC_CHANNEL);
+    // 直接返回单次ADC转换结果
+    return Get_Adc3(LIGHT_ADC_CHANNEL);
 }
 
 /**
@@ -52,21 +52,22 @@ uint8_t Light_GetValue(void)
     // 多次采样取平均值，提高稳定性
     for(t = 0; t < LSENS_READ_TIMES; t++)
     {
-        temp_val += Get_Adc1(LIGHT_ADC_CHANNEL); // <--- 已修改: 调用 Get_Adc1()
+        temp_val += Get_Adc3(LIGHT_ADC_CHANNEL); // <--- 已修改: 调用 Get_Adc3()
         Mdelay_Lib(5);  // 每次采样间隔5ms
     }
     
     temp_val = temp_val / LSENS_READ_TIMES;  // 得到平均值
-    
+
     // --- 已修改: 增加安全判断，防止计算错误 ---
     // 检查ADC值是否在有效范围内
-    if(temp_val > 4095) temp_val = 4095;
+    int range = 4095 * 10 * 2;
+    if(temp_val > range) temp_val = range;
 
     // 线性映射公式：light = 100 - (adc * 100 / 4095)
     // 光敏电阻特性：光照强 -> 电阻小 -> ADC值小 -> 光照强度高
     // 光照弱 -> 电阻大 -> ADC值大 -> 光照强度低
-    uint32_t mapped_val = temp_val * 100 / 4095;
-    
+    uint32_t mapped_val = temp_val * 100 / range; // 映射到0-100范围
+
     uint8_t light_percent;
     if (mapped_val >= 100)
     {

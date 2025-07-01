@@ -4,15 +4,15 @@
 #include "stm32f4xx.h"
 
 /* * 光敏电阻ADC通道定义 (已更正)
- * 根据GEC-M4原理图，光敏传感器连接到 PB1 -> ADC1_IN9
+ * 根据GEC-M4原理图，光敏传感器连接到 PF7 -> ADC3_IN5
  */
-#define LIGHT_ADC_CHANNEL       9                   // ADC1 通道9
-#define LIGHT_GPIO_PORT         GPIOB               // 使用 GPIOB
-#define LIGHT_GPIO_PIN          GPIO_Pin_1          // 使用 Pin 1
-#define LIGHT_GPIO_CLK          RCC_AHB1Periph_GPIOB
+#define LIGHT_ADC_CHANNEL       ADC_Channel_5 // PF7 -> ADC3_IN5
+#define LIGHT_GPIO_PORT         GPIOF               // 使用 GPIOF
+#define LIGHT_GPIO_PIN          GPIO_Pin_7          // 使用 Pin 7
+#define LIGHT_GPIO_CLK          RCC_AHB1Periph_GPIOF
 
 /* 光敏电阻读取次数定义 */
-#define LSENS_READ_TIMES        10              // 多次采样取平均值，增加稳定性
+#define LSENS_READ_TIMES        5              // 多次采样取平均值，增加稳定性
 
 /* 光照强度等级定义 (基于0-100范围) */
 typedef enum
