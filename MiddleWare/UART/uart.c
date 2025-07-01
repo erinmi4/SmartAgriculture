@@ -483,6 +483,15 @@ void USART3_IRQHandler(void)
  */
 void UART_RxCallback(USART_TypeDef* USARTx, uint8_t ch)
 {
+    /* 处理USART2的蓝牙数据 */
+    if(USARTx == USART2)
+    {
+        /* 调用蓝牙数据处理函数 */
+        extern void Bluetooth_ProcessRxData(uint8_t ch);
+        Bluetooth_ProcessRxData(ch);
+        return;  /* 直接返回，不进行echo */
+    }
+    
     /* 处理USART3的MQ-2传感器数据 */
     if(USARTx == USART3)
     {

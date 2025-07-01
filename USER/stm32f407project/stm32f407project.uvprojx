@@ -365,7 +365,7 @@
               <MiscControls></MiscControls>
               <Define>STM32F40_41xxx,USE_STDPERIPH_DRIVER</Define>
               <Undefine></Undefine>
-              <IncludePath>..\..\CORE;..\..\FWLIB\inc;.\src;..\..\SYSTEM;..\..\HARDWARE\LED;..\..\MiddleWare\EXTI;..\..\HARDWARE\BEEP;..\..\HARDWARE\KEY;..\..\MiddleWare\UART;..\..\HARDWARE\LCD;..\..\HARDWARE\DHT11;..\..\HARDWARE\MQ</IncludePath>
+              <IncludePath>..\..\CORE;..\..\FWLIB\inc;.\src;..\..\SYSTEM;..\..\HARDWARE\LED;..\..\MiddleWare\EXTI;..\..\HARDWARE\BEEP;..\..\HARDWARE\KEY;..\..\MiddleWare\UART;..\..\HARDWARE\LCD;..\..\HARDWARE\DHT11;..\..\HARDWARE\MQ;..\..\HARDWARE\BLUETOOTH</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -907,6 +907,16 @@
               <FileName>mq2.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\..\HARDWARE\MQ\mq2.h</FilePath>
+            </File>
+            <File>
+              <FileName>bluetooth.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\HARDWARE\BLUETOOTH\bluetooth.c</FilePath>
+            </File>
+            <File>
+              <FileName>bluetooth.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\HARDWARE\BLUETOOTH\bluetooth.h</FilePath>
             </File>
           </Files>
         </Group>
