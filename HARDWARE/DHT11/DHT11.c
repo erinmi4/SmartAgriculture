@@ -2,185 +2,129 @@
  * @file    DHT11.c
  * @brief   DHT11温湿度传感器驱动实现
  * @author  Mika
- * @date    2025-06-30
- * @version 1.0
+ * @date    2025-07-01
+ * @version 3.0
  * 
  * @note    DHT11数字温湿度传感器驱动实现
  *          数据格式：湿度整数+湿度小数+温度整数+温度小数+校验和
  *          通信协议：单总线协议
+ *          使用delay.h中的Mdelay_Lib和Udelay_Lib函数进行延时
  */
 
 #include "DHT11.h"
-
-// 全局变量定义
-unsigned char dht11_temp = 0;  // 温度值
-unsigned char dht11_humi = 0;  // 湿度值
-
-/**
- * @brief 简单的微秒延时
- * @param us: 延时微秒数
- * @retval 无
- * @note 使用简单循环实现，避免系统冲突
- */
-static void dht11_delay_us(uint32_t us)
-{
-    uint32_t count = us * 168;  // 根据168MHz系统时钟计算
-    volatile uint32_t i;
-    for(i = 0; i < count; i++)
-    {
-        __NOP();
-    }
-}
-
-/**
- * @brief 简单的毫秒延时
- * @param ms: 延时毫秒数
- * @retval 无
- */
-static void dht11_delay_ms(uint32_t ms)
-{
-    uint32_t i;
-    for(i = 0; i < ms; i++)
-    {
-        dht11_delay_us(1000);
-    }
-}
+#include "delay.h"
 
 /**
  * @brief 配置DHT11引脚为输出模式
  * @param 无
  * @retval 无
  */
-void dht11_io_out(void)
+void DHT11_IO_Output(void)
 {
     GPIO_InitTypeDef GPIO_InitStructure;
     
     GPIO_InitStructure.GPIO_Pin = DHT11_IO;
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_OUT;       // 输出模式
     GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;      // 推挽输出
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;   // 输出速度50MHz
-    GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP;        // 上拉
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;  // 高速
+    GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;    // 无上下拉
     GPIO_Init(DHT11_PORT, &GPIO_InitStructure);
 }
 
 /**
- * @brief 配置DHT11引脚为输入模式
+ * @brief 配置DHT11引脚为浮空输入模式
  * @param 无
  * @retval 无
  */
-void dht11_io_in(void)
+void DHT11_IO_Input(void)
 {
     GPIO_InitTypeDef GPIO_InitStructure;
     
     GPIO_InitStructure.GPIO_Pin = DHT11_IO;
     GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN;        // 输入模式
-    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;   // 输入速度50MHz
-    GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP;        // 上拉
+    GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;    // 浮空输入
     GPIO_Init(DHT11_PORT, &GPIO_InitStructure);
 }
 
 /**
- * @brief DHT11初始化
- * @param 无
- * @retval 0-初始化成功，1-初始化失败
- */
-unsigned char dht11_init(void)
-{
-    // 使能GPIOE时钟
-    RCC_AHB1PeriphClockCmd(DHT11_RCC, ENABLE);
-    
-    // 配置引脚为输出模式并拉高
-    dht11_io_out();
-    DHT11_DQ_OUT;
-    
-    // 发送开始信号并检查响应
-    dht11_start();
-    return dht11_check();
-}
-
-/**
- * @brief 发送开始信号
+ * @brief 启动DHT11通信
  * @param 无
  * @retval 无
- * @note 主机发送开始信号：拉低至少18ms，然后拉高20-40us
+ * @note 发送开始信号：拉低至少18ms，然后拉高20-40us
  */
-void dht11_start(void)
+void DHT11_Start(void)
 {
-    dht11_io_out();     // 设置为输出模式
-    
-    DHT11_DQ_LOW;       // 将总线拉低
-    dht11_delay_ms(20); // 延时至少18ms，这里用20ms确保稳定
-    
-    DHT11_DQ_OUT;       // 将总线拉高
-    dht11_delay_us(30); // 拉高20-40us，这里用30us
+    DHT11_IO_Output();                      // 设置为输出模式
+    GPIO_ResetBits(DHT11_PORT, DHT11_IO);   // 将总线拉低
+    Mdelay_Lib(20);                         // 延时至少18ms，这里用20ms
+    GPIO_SetBits(DHT11_PORT, DHT11_IO);     // 将总线拉高
+    Udelay_Lib(30);                         // 拉高20-40us
 }
 
 /**
- * @brief 等待DHT11响应
+ * @brief 检查DHT11是否响应
  * @param 无
- * @retval 0-DHT11响应正常，1-DHT11响应超时
+ * @retval 0-响应成功，1-响应失败
  * @note DHT11响应：拉低80us，然后拉高80us
  */
-unsigned char dht11_check(void)
+unsigned char DHT11_Check(void)
 {
-    unsigned char retry = 0;
+    unsigned char n = 0;
     
-    dht11_io_in();      // 设置为输入模式
+    DHT11_IO_Input();  // 确保是输入模式
     
-    // 等待DHT11拉低总线（响应信号）
-    while(DHT11_DQ_IN && retry < 100)
+    // 等待DHT11拉低总线（响应开始）
+    while(GPIO_ReadInputDataBit(DHT11_PORT, DHT11_IO) == 1 && n < 100)
     {
-        retry++;
-        dht11_delay_us(1);
+        n++;
+        Udelay_Lib(1);
     }
-    if(retry >= 100)
-        return 1;       // 超时，DHT11无响应
+    if(n >= 100)
+        return 1;  // 超时，未响应
     
-    retry = 0;
-    // 等待DHT11拉高总线
-    while(!DHT11_DQ_IN && retry < 100)
+    n = 0;
+    // 等待DHT11拉高总线（响应结束）
+    while(GPIO_ReadInputDataBit(DHT11_PORT, DHT11_IO) == 0 && n < 100)
     {
-        retry++;
-        dht11_delay_us(1);
+        n++;
+        Udelay_Lib(1);
     }
-    if(retry >= 100)
-        return 1;       // 超时，DHT11响应异常
+    if(n >= 100)
+        return 1;  // 超时，未响应
     
-    return 0;           // DHT11响应正常
+    return 0;  // 响应成功
 }
 
 /**
- * @brief 读取一个位
+ * @brief 读取一个数据位
  * @param 无
  * @retval 读取到的位值（0或1）
- * @note 数据位传输：低电平50us + 高电平26-28us表示0，低电平50us + 高电平70us表示1
+ * @note DHT11数据位协议：
+ *       数据0：50us低电平 + 26-28us高电平
+ *       数据1：50us低电平 + 70us高电平
  */
-unsigned char dht11_read_bit(void)
+unsigned char DHT11_ReadBit(void)
 {
-    unsigned char retry = 0;
+    unsigned char n = 0;
     
-    // 等待低电平结束
-    while(DHT11_DQ_IN && retry < 100)
+    // 等待低电平结束（每个数据位都以50us低电平开始）
+    while(GPIO_ReadInputDataBit(DHT11_PORT, DHT11_IO) == 0 && n < 100)
     {
-        retry++;
-        dht11_delay_us(1);
+        n++;
+        Udelay_Lib(1);
     }
     
-    retry = 0;
-    // 等待高电平开始
-    while(!DHT11_DQ_IN && retry < 100)
+    n = 0;
+    // 计算高电平持续时间
+    while(GPIO_ReadInputDataBit(DHT11_PORT, DHT11_IO) == 1 && n < 100)
     {
-        retry++;
-        dht11_delay_us(1);
+        n++;
+        Udelay_Lib(1);
     }
     
-    // 延时40us后判断数据位
-    dht11_delay_us(40);
-    
-    if(DHT11_DQ_IN)
-        return 1;       // 高电平时间长，表示数据位1
-    else
-        return 0;       // 高电平时间短，表示数据位0
+    // 根据高电平持续时间判断数据位
+    // 高电平持续时间大于30us为1，否则为0
+    return n > 30 ? 1 : 0;
 }
 
 /**
@@ -189,50 +133,67 @@ unsigned char dht11_read_bit(void)
  * @retval 读取到的字节数据
  * @note 从高位到低位依次读取8个位
  */
-unsigned char dht11_read_byte(void)
+unsigned char DHT11_ReadByte(void)
 {
     unsigned char i, dat = 0;
     
     for(i = 0; i < 8; i++)
     {
         dat <<= 1;              // 左移一位
-        dat |= dht11_read_bit(); // 读取一位数据
+        dat |= DHT11_ReadBit(); // 读取一位并或运算
     }
     
     return dat;
 }
 
 /**
- * @brief 读取DHT11温湿度数据
+ * @brief DHT11初始化
  * @param 无
- * @retval 0-读取成功，1-读取失败
- * @note 数据格式：湿度整数部分+湿度小数部分+温度整数部分+温度小数部分+校验和
+ * @retval 无
  */
-unsigned char dht11_read_data(void)
+void DHT11_Init(void)
+{
+    // 使能GPIOE时钟
+    RCC_AHB1PeriphClockCmd(DHT11_RCC, ENABLE);
+    
+    // 配置为输出模式，拉高数据线
+    DHT11_IO_Output();
+    GPIO_SetBits(DHT11_PORT, DHT11_IO);
+}
+
+/**
+ * @brief 读取DHT11温湿度数据
+ * @param temp: 温度值指针
+ * @param humi: 湿度值指针
+ * @retval 0-读取成功，1-读取失败
+ * @note 数据格式：湿度整数+湿度小数+温度整数+温度小数+校验和
+ */
+unsigned char DHT11_ReadData(unsigned char *temp, unsigned char *humi)
 {
     unsigned char buf[5];
-    unsigned char i;
+    int i;
     
     // 发送开始信号
-    dht11_start();
+    DHT11_Start();
     
-    // 检查DHT11响应
-    if(dht11_check() == 0)
+    // 检查DHT11是否响应
+    if(DHT11_Check() == 0)  // 响应成功
     {
-        // 读取5个字节数据
+        // 读取40位数据（5个字节）
         for(i = 0; i < 5; i++)
         {
-            buf[i] = dht11_read_byte();
+            buf[i] = DHT11_ReadByte();
         }
         
         // 校验数据
         if((buf[0] + buf[1] + buf[2] + buf[3]) == buf[4])
         {
-            dht11_humi = buf[0];    // 湿度整数部分
-            dht11_temp = buf[2];    // 温度整数部分
-            return 0;               // 读取成功
+            *humi = buf[0];    // 湿度整数部分
+            *temp = buf[2];    // 温度整数部分
+            
+            return 0;  // 读取成功
         }
     }
     
-    return 1;                       // 读取失败
+    return 1;  // 读取失败
 }

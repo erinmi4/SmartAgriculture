@@ -2,8 +2,8 @@
  * @file    DHT11.h
  * @brief   DHT11温湿度传感器驱动头文件
  * @author  Mika
- * @date    2025-06-30
- * @version 1.0
+ * @date    2025-07-01
+ * @version 3.0
  * 
  * @note    DHT11数字温湿度传感器驱动
  *          使用PE5引脚连接DHT11的DATA引脚
@@ -21,22 +21,18 @@
 #define DHT11_RCC       RCC_AHB1Periph_GPIOE
 
 // DHT11引脚操作宏定义
-#define DHT11_DQ_OUT    GPIO_WriteBit(DHT11_PORT, DHT11_IO, Bit_SET)   // 拉高数据线
-#define DHT11_DQ_LOW    GPIO_WriteBit(DHT11_PORT, DHT11_IO, Bit_RESET) // 拉低数据线
-#define DHT11_DQ_IN     GPIO_ReadInputDataBit(DHT11_PORT, DHT11_IO)    // 读取数据线状态
-
-// 全局变量声明
-extern unsigned char dht11_temp;    // 温度值
-extern unsigned char dht11_humi;    // 湿度值
+#define DHT11_DQ_OUT    GPIO_SetBits(DHT11_PORT, DHT11_IO)     // 拉高数据线
+#define DHT11_DQ_LOW    GPIO_ResetBits(DHT11_PORT, DHT11_IO)   // 拉低数据线
+#define DHT11_DQ_IN     GPIO_ReadInputDataBit(DHT11_PORT, DHT11_IO)  // 读取数据线状态
 
 // 函数声明
-void dht11_io_out(void);            // 配置DHT11引脚为输出模式
-void dht11_io_in(void);             // 配置DHT11引脚为输入模式
-unsigned char dht11_init(void);     // DHT11初始化
-void dht11_start(void);             // 发送开始信号
-unsigned char dht11_check(void);    // 等待DHT11响应
-unsigned char dht11_read_bit(void); // 读取一个位
-unsigned char dht11_read_byte(void);// 读取一个字节
-unsigned char dht11_read_data(void);// 读取温湿度数据
+void DHT11_IO_Output(void);                         // 配置DHT11引脚为输出模式
+void DHT11_IO_Input(void);                          // 配置DHT11引脚为输入模式
+void DHT11_Start(void);                             // 启动DHT11通信
+unsigned char DHT11_Check(void);                    // 检查DHT11响应
+unsigned char DHT11_ReadBit(void);                  // 读取一个位
+unsigned char DHT11_ReadByte(void);                 // 读取一个字节
+void DHT11_Init(void);                              // DHT11初始化
+unsigned char DHT11_ReadData(unsigned char *temp, unsigned char *humi);  // 读取温湿度数据
 
 #endif /* __DHT11_H */
