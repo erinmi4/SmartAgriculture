@@ -13,9 +13,8 @@
 
 int main(void)
 {
-    uint16_t light_raw = 0;
-    uint8_t light_percent = 0;
-    LightLevel_t light_level;
+    uint16_t light_value = 0;
+    LightLevel_t light_level = LIGHT_LEVEL_NORMAL;
     
     // 系统初始化
     SystemInit();
@@ -24,31 +23,38 @@ int main(void)
     // 初始化LCD1602
     lcd_init();
     
+    // 测试LCD显示
+    lcd_clear();
+    lcd_print_str(0, 0, "Light Test");
+    lcd_print_str(1, 0, "Initializing...");
+    Mdelay_Lib(2000);
+    
     // 初始化光敏电阻
     lcd_clear();
     lcd_print_str(0, 0, "Init Light...");
     Light_Init();
     Mdelay_Lib(1000);
     
+    // 显示启动信息
     lcd_clear();
+    lcd_print_str(0, 0, "Light Sensor");
+    lcd_print_str(1, 0, "Ready!");
+    Mdelay_Lib(2000);
     
     while(1)
     {
         // 获取光照数据
-        light_raw = Light_GetRawValue();        // 原始ADC值 (0-4095)
-        light_percent = Light_GetValue();       // 0-100范围的光照强度百分比
-        light_level = Light_GetLevel();         // 光照等级
+        light_value = Light_GetRawValue();
+        light_level = Light_GetLevel();
         
         // 在LCD上显示光照数据
         char str[32] = {0};
         
-        // --- 已修改: 更新显示逻辑 ---
-        // 第一行显示光照百分比和原始ADC值
-        // 使用 %u 来打印无符号整数
-        sprintf(str, "L:%3u%% ADC:%4u", light_percent, light_raw);
+        // 第一行显示原始ADC值
+        sprintf(str, "ADC: %4d", light_value);
         lcd_print_str(0, 0, str);
         
-        // 第二行显示光照等级的文字描述
+        // 第二行显示光照等级
         sprintf(str, "Level: %s", Light_GetLevelString(light_level));
         lcd_print_str(1, 0, str);
         
