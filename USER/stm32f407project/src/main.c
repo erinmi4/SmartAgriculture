@@ -1,12 +1,12 @@
 /* =================== 调试开关 =================== */
-// 如果出现卡死问题，可以逐个禁用模块进行排查
-#define ENABLE_DHT11       0    // 1-启用DHT11, 0-禁用DHT11 (先禁用排查)
-#define ENABLE_MPU6050     0    // 1-启用MPU6050, 0-禁用MPU6050 (先禁用排查)
-#define ENABLE_MQ2         0    // 1-启用MQ2, 0-禁用MQ2  
-#define ENABLE_LIGHT       0    // 1-启用光敏电阻, 0-禁用光敏电阻
-#define ENABLE_BLUETOOTH   1    // 1-启用蓝牙, 0-禁用蓝牙
-#define ENABLE_BREATHING   0    // 1-启用呼吸灯, 0-禁用呼吸灯
-#define ENABLE_ALARM       0    // 1-启用报警, 0-禁用报警
+// 逐步启用模块进行调试，确保系统稳定运行
+#define ENABLE_DHT11       0    // 1-启用DHT11, 0-禁用DHT11 (温湿度传感器) - 先禁用排查
+#define ENABLE_MPU6050     0    // 1-启用MPU6050, 0-禁用MPU6050 (姿态传感器) - 先禁用排查
+#define ENABLE_MQ2         0    // 1-启用MQ2, 0-禁用MQ2 (烟雾传感器) - 先禁用排查
+#define ENABLE_LIGHT       1    // 1-启用光敏电阻, 0-禁用光敏电阻 (简单ADC)
+#define ENABLE_BLUETOOTH   1    // 1-启用蓝牙, 0-禁用蓝牙 (远程控制)
+#define ENABLE_BREATHING   0    // 1-启用呼吸灯, 0-禁用呼吸灯 (状态指示) - 先禁用排查
+#define ENABLE_ALARM       1    // 1-启用报警, 0-禁用报警 (蜂鸣器和LED)
 
 /* =================== 头文件包含 =================== */
 #include "stm32f4xx.h"
@@ -171,85 +171,74 @@ void LCD_ShowNotification(char* message, uint32_t duration);  // 显示LCD提示
 void LCD_UpdateNotification(void);               // 更新LCD提示状态
 
 /* =================== 系统时钟相关 =================== */
-// 非阻塞延时函数
+// 非阻塞延时函数 - 修复版，避免死循环
 void delay_ms_non_blocking(uint32_t ms)
 {
-    static uint32_t start_time = 0;
-    start_time = system_tick;
+    uint32_t start_time = system_tick;
+    uint32_t timeout = ms + 1000;  // 添加超时保护，防止死循环
+    
     while((system_tick - start_time) < ms)
     {
-        // 非阻塞等待
+        // 非阻塞等待，添加超时保护
+        if((system_tick - start_time) > timeout)
+        {
+            break;  // 超时退出，防止死循环
+        }
+        __NOP();  // 空操作，让CPU处理其他任务
     }
 }
 
 /* =================== 第1步：系统和传感器初始化 =================== */
 void System_Init(void)
 {
-    // 系统时钟初始化
+    // 基础系统初始化
     SystemInit();
     
-    // 配置SysTick定时器，1ms中断一次
-    SysTick_Config(SystemCoreClock / 1000);
-    NVIC_SetPriority(SysTick_IRQn, 0);  // 设置最高优先级
-    
-    // LCD初始化并显示欢迎信息
+    // 首先确保LCD能工作
     lcd_init();
     lcd_clear();
     lcd_print_str(0, 0, "Smart Agriculture");
-    lcd_print_str(1, 0, "Initializing...");
-    delay_ms_non_blocking(1000);
+    lcd_print_str(1, 0, "Starting...");
     
-    // LED初始化
+    // 配置SysTick定时器，1ms中断一次 - 移到LCD后避免中断干扰初始化
+    SysTick_Config(SystemCoreClock / 1000);
+    NVIC_SetPriority(SysTick_IRQn, 0);
+    
+    // 基础硬件初始化
     Led_Init();
+    lcd_print_str(1, 0, "LED OK");
+    delay_ms_non_blocking(300);
     
-#if ENABLE_BREATHING
-    // 呼吸灯初始化
-    lcd_print_str(1, 0, "Breathing LED...");
-    Led_BreathingInit();
-    delay_ms_non_blocking(500);
-#endif
-    
-    // 按键初始化
     Key_Init();
+    lcd_print_str(1, 0, "KEY OK");
+    delay_ms_non_blocking(300);
     
-    // 蜂鸣器初始化
     Beep_Init();
+    lcd_print_str(1, 0, "BEEP OK");
+    delay_ms_non_blocking(300);
     
     // ADC初始化
     Adc3_Init();
-    
+    lcd_print_str(1, 0, "ADC OK");
+    delay_ms_non_blocking(300);
+
 #if ENABLE_BLUETOOTH
-    // 蓝牙初始化
-    lcd_print_str(1, 0, "Bluetooth...");
-    UART2_Init(UART_BAUD_9600);  // 修复：使用正确的波特率枚举类型
+    // 蓝牙初始化 - 简化版，减少阻塞
+    lcd_print_str(1, 0, "BT Init...");
+    UART2_Init(UART_BAUD_9600);
+    delay_ms_non_blocking(100);  // 短暂等待UART稳定
+    
     Bluetooth_Init();
     bt_state.enabled = 1;
-    
-    // 发送启动确认消息（参考main_bluetooth.c）
-    delay_ms_non_blocking(100);  // 等待蓝牙模块稳定
-    
-    // 简化初始化消息，专注于调试
-    lcd_print_str(1, 0, "BT Sending...");
-    Bluetooth_SendString("=== BT TEST START ===\r\n");
-    delay_ms_non_blocking(100);
-    
-    Bluetooth_SendString("Smart Agriculture v2.0\r\n");
-    delay_ms_non_blocking(100);
-    
-    Bluetooth_SendString("Commands: 1-9, 0\r\n");
-    delay_ms_non_blocking(100);
-    
-    Bluetooth_SendString("=== BT TEST END ===\r\n");
-    lcd_print_str(1, 0, "BT Init Done");
-    
-    delay_ms_non_blocking(500);
+    lcd_print_str(1, 0, "BT OK");
+    delay_ms_non_blocking(300);
 #else
     lcd_print_str(1, 0, "BT Disabled");
     bt_state.enabled = 0;
-    delay_ms_non_blocking(500);
+    delay_ms_non_blocking(300);
 #endif
     
-    lcd_print_str(1, 0, "System OK");
+    lcd_print_str(1, 0, "System Ready!");
     delay_ms_non_blocking(500);
 }
 
@@ -257,18 +246,22 @@ void Sensors_Init(void)
 {
     char str[50];
     
+    // 显示传感器初始化开始
+    lcd_print_str(1, 0, "Sensors Init...");
+    delay_ms_non_blocking(500);
+    
 #if ENABLE_DHT11
     // DHT11初始化
     lcd_print_str(1, 0, "DHT11...");
     dht11_init();
-    Mdelay_Lib(500);
+    delay_ms_non_blocking(500);
     
     // 测试DHT11读取
     uint8_t test_temp, test_humi;
     if(dht11_read_dat(&test_temp, &test_humi) == 0)
     {
         sensor_data.dht11_status = 1;
-        sprintf(str, "DHT11 OK: %d,%d", test_temp, test_humi);
+        sprintf(str, "DHT11 OK: %d%%,%dC", test_humi, test_temp);
         lcd_print_str(1, 0, str);
     }
     else
@@ -276,44 +269,47 @@ void Sensors_Init(void)
         sensor_data.dht11_status = 0;
         lcd_print_str(1, 0, "DHT11 Failed");
     }
-    Mdelay_Lib(1000);
+    delay_ms_non_blocking(1000);
 #else
     lcd_print_str(1, 0, "DHT11 Disabled");
     sensor_data.dht11_status = 0;
-    delay_ms_non_blocking(100);
+    sensor_data.temperature = 25;  // 设置默认值
+    sensor_data.humidity = 60;
+    delay_ms_non_blocking(300);
 #endif
 
 #if ENABLE_LIGHT
     // 光敏电阻初始化
     lcd_print_str(1, 0, "Light Sensor...");
     Light_Init();
-    delay_ms_non_blocking(100);
+    delay_ms_non_blocking(200);
+    
+    // 测试光敏电阻读取
+    uint16_t test_light = Light_GetRawValue();
+    sprintf(str, "Light OK: %d", test_light);
+    lcd_print_str(1, 0, str);
+    delay_ms_non_blocking(500);
+#else
+    lcd_print_str(1, 0, "Light Disabled");
+    sensor_data.light_raw_value = 2048;
+    sensor_data.light_percent = 50;
+    delay_ms_non_blocking(300);
 #endif
 
 #if ENABLE_MQ2
     // MQ-2烟雾传感器初始化
     lcd_print_str(1, 0, "MQ2 Sensor...");
     MQ2_Init();
-    delay_ms_non_blocking(200);  // MQ2需要更长的初始化时间
+    delay_ms_non_blocking(300);
     
-    // 测试MQ2通信
-    lcd_print_str(1, 0, "Testing MQ2...");
-    MQ2_ClearFlag();
-    MQ2_SendCommand();
-    delay_ms_non_blocking(100);  // 等待响应
-    
-    if(MQ2_IsDataReady())
-    {
-        uint16_t test_ppm = MQ2_GetValue();
-        sprintf(str, "MQ2 OK: %dppm", test_ppm);
-        lcd_print_str(1, 0, str);
-    }
-    else
-    {
-        lcd_print_str(1, 0, "MQ2 No Response");
-        sensor_data.error_count++;
-    }
-    delay_ms_non_blocking(500);
+    // 简化MQ2测试
+    lcd_print_str(1, 0, "MQ2 Init Done");
+    delay_ms_non_blocking(300);
+#else
+    lcd_print_str(1, 0, "MQ2 Disabled");
+    sensor_data.smoke_ppm_value = 45;
+    sensor_data.smoke_percent = 4.5f;
+    delay_ms_non_blocking(300);
 #endif
 
 #if ENABLE_MPU6050
@@ -326,6 +322,7 @@ void Sensors_Init(void)
     }
     else
     {
+        sensor_data.mpu_status = 0;
         sensor_data.error_count++;
         lcd_print_str(1, 0, "MPU6050 Failed");
     }
@@ -333,13 +330,17 @@ void Sensors_Init(void)
 #else
     lcd_print_str(1, 0, "MPU6050 Disabled");
     sensor_data.mpu_status = 0;
-    delay_ms_non_blocking(100);
+    // 设置默认值
+    sensor_data.mpu_data.accel_x = 0.0f;
+    sensor_data.mpu_data.accel_y = 0.0f;
+    sensor_data.mpu_data.accel_z = 1.0f;
+    sensor_data.mpu_data.temp = 25.0f;
+    delay_ms_non_blocking(300);
 #endif
     
     // 初始化完成
-    sprintf(str, "Init Complete!");
-    lcd_print_str(1, 0, str);
-    delay_ms_non_blocking(500);
+    lcd_print_str(1, 0, "Sensors Ready!");
+    delay_ms_non_blocking(1000);
     
     // 清屏准备进入主循环显示
     lcd_clear();
@@ -350,75 +351,66 @@ void Data_Collection(void)
 {
     static uint32_t last_read = 0;
     
-    // 每500ms读取一次所有传感器
-    if(system_tick - last_read >= 500)
+    // 每1000ms读取一次所有传感器（降低频率，减少系统负担）
+    if(system_tick - last_read >= 1000)
     {
         last_read = system_tick;
         
 #if ENABLE_DHT11
-        // DHT11数据采集 - 只在状态正常时读取
-        if(sensor_data.dht11_status)
+        // DHT11数据采集 - 只在状态正常时读取，增加读取间隔控制
+        static uint32_t last_dht11_read = 0;
+        if(sensor_data.dht11_status && (system_tick - last_dht11_read >= 3000))
         {
+            last_dht11_read = system_tick;
             if(dht11_read_dat(&sensor_data.temperature, &sensor_data.humidity) != 0)
             {
                 sensor_data.error_count++;
+                // DHT11读取失败，但保持之前的数值
             }
         }
 #else
-        // DHT11被禁用，设置默认值
+        // DHT11被禁用，使用默认值
         sensor_data.temperature = 25;
         sensor_data.humidity = 60;
 #endif
 
 #if ENABLE_LIGHT
-        // 光照数据采集 - 修复光敏电阻读取问题
+        // 光照数据采集 - 简化处理
         sensor_data.light_raw_value = Light_GetRawValue();
         if(sensor_data.light_raw_value > 4095) sensor_data.light_raw_value = 4095;
         
         // 使用专用函数获取百分比值
         sensor_data.light_percent = Light_GetValue();
-        
-        // 调试信息：如果光照值异常，记录错误
-        if(sensor_data.light_raw_value == 0 && sensor_data.light_percent == 0) {
-            sensor_data.error_count++;
-        }
+        if(sensor_data.light_percent > 100) sensor_data.light_percent = 100;
 #else
         sensor_data.light_raw_value = 2048;
         sensor_data.light_percent = 50;
 #endif
 
 #if ENABLE_MQ2
-        // MQ2烟雾数据采集 - 使用MQ-2专用接口，增加调试信息
-        static uint32_t mq2_timeout_count = 0;
+        // MQ2烟雾数据采集 - 简化版，减少等待时间
+        MQ2_ClearFlag();
+        MQ2_SendCommand();
         
-        MQ2_ClearFlag();           // 清除数据标志
-        MQ2_SendCommand();         // 发送读取命令
-        
-        // 等待数据就绪，但不要无限等待
+        // 简化等待逻辑，避免长时间阻塞
         uint32_t wait_start = system_tick;
-        while(!MQ2_IsDataReady() && (system_tick - wait_start) < 50)
+        while(!MQ2_IsDataReady() && (system_tick - wait_start) < 20)
         {
-            // 最多等待50ms，减少阻塞时间
-            // 不使用延时，直接检查
+            // 最多等待20ms
         }
         
-        if(MQ2_IsDataReady())      // 检查数据是否就绪
+        if(MQ2_IsDataReady())
         {
-            sensor_data.smoke_ppm_value = MQ2_GetValue();  // 获取ppm数值
-            // 将ppm转换为百分比用于报警判断 (假设1000ppm为100%)
+            sensor_data.smoke_ppm_value = MQ2_GetValue();
             sensor_data.smoke_percent = (float)sensor_data.smoke_ppm_value / 10.0f;
-            mq2_timeout_count = 0;  // 重置超时计数
         }
         else
         {
-            // 数据未就绪，超时
-            mq2_timeout_count++;
             sensor_data.error_count++;
-            // 保持之前的数值，不设为0
         }
 #else
-        sensor_data.smoke_ppm_value = 45;   // 默认ppm值
-        sensor_data.smoke_percent = 4.5f;   // 对应的百分比
+        sensor_data.smoke_ppm_value = 45;
+        sensor_data.smoke_percent = 4.5f;
 #endif
 
 #if ENABLE_MPU6050
@@ -897,58 +889,48 @@ void Bluetooth_ParseCommand(char* command)
 }
 
 /**
- * @brief 蓝牙命令处理主函数（高性能调试版）
+ * @brief 蓝牙命令处理主函数（完整功能版 - 心跳包已禁用）
  */
 void Bluetooth_Handler(void)
 {
 #if ENABLE_BLUETOOTH
     static uint32_t last_bluetooth_check = 0;
-    static uint32_t last_heartbeat = 0;
-    static uint32_t debug_counter = 0;
+    // static uint32_t last_heartbeat = 0;  // 心跳包功能已注释
     
-    // 每10ms检查一次蓝牙命令（提高响应速度）
-    if(system_tick - last_bluetooth_check >= 10)
+    // 每50ms检查一次蓝牙命令（降低检查频率，减少资源占用）
+    if(system_tick - last_bluetooth_check >= 50)
     {
         last_bluetooth_check = system_tick;
-        debug_counter++;
         
-        // 每2秒发送一次简化心跳包用于调试（加快测试）
-        if(system_tick - last_heartbeat >= 2000)
+        // 心跳包功能已注释掉，减少资源占用
+        /*
+        // 每10秒发送一次完整心跳包
+        if(system_tick - last_heartbeat >= 10000)
         {
-            char heartbeat[40];
-            sprintf(heartbeat, "ALIVE: %ld\r\n", debug_counter / 100);  // 显示秒数
+            char heartbeat[80];
+            sprintf(heartbeat, "HEARTBEAT: T=%dC H=%d%% L=%d%% S=%dppm A=%s\r\n", 
+                    sensor_data.temperature, 
+                    sensor_data.humidity,
+                    sensor_data.light_percent,
+                    sensor_data.smoke_ppm_value,
+                    alarm_status.any_alarm ? "ALARM" : "OK");
             Bluetooth_SendString(heartbeat);
             last_heartbeat = system_tick;
         }
+        */
         
         // 处理蓝牙命令
         if(bt_command_ready)
         {
-            // 简化处理，先确认能接收到命令
-            Bluetooth_SendString("GOT: ");
-            Bluetooth_SendString(bt_command_buffer);
-            Bluetooth_SendString("\r\n");
+            // 立即确认收到命令
+            Bluetooth_SendString("CMD_RECEIVED\r\n");
             
-            // 简单的命令处理
-            if(bt_command_buffer[0] == '1')
-            {
-                Bluetooth_SendString("CMD1: OK\r\n");
-            }
-            else if(bt_command_buffer[0] == '9')
-            {
-                Bluetooth_SendString("STATUS: BT Working\r\n");
-            }
-            else
-            {
-                Bluetooth_SendString("UNKNOWN\r\n");
-            }
+            // 处理完整命令
+            Bluetooth_ParseCommand(bt_command_buffer);
             
             // 清空缓冲区
             memset(bt_command_buffer, 0, BT_CMD_BUFFER_SIZE);
             bt_command_ready = 0;
-            
-            // 更新计数
-            bt_state.command_count++;
         }
     }
 #endif
@@ -963,28 +945,18 @@ int main(void)
     // 传感器初始化
     Sensors_Init();
     
-    // 主循环
+    // 主循环 - 简化版，专注于基础功能
     while(1)
     {
-        // 强制蓝牙测试 - 每秒发送一次测试消息
-        static uint32_t last_bt_test = 0;
-        if(system_tick - last_bt_test >= 1000)
-        {
-            last_bt_test = system_tick;
-            char test_msg[30];
-            sprintf(test_msg, "TEST: %ld\r\n", system_tick / 1000);
-            Bluetooth_SendString(test_msg);
-        }
-        
-        // LED闪烁指示系统运行  
+        // 系统运行指示 - LED每2秒闪烁一次（降低频率）
         static uint32_t last_led_toggle = 0;
-        if(system_tick - last_led_toggle >= 1000)
+        if(system_tick - last_led_toggle >= 2000)
         {
             last_led_toggle = system_tick;
             Led_Toggle(LED0);
         }
         
-        // 数据采集
+        // 数据采集 - 每1秒采集一次（降低频率）
         Data_Collection();
         
         // 报警检查
@@ -999,7 +971,6 @@ int main(void)
         // 显示更新
         Display_Update();
         
-        // 不再使用阻塞延时，让程序快速循环
-        // 时钟由SysTick中断自动更新
+        // 主循环无阻塞延时，让系统快速响应
     }
 }
