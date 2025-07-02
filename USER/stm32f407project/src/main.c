@@ -166,6 +166,7 @@ void System_Init(void)
     
     // LED初始化
     Led_Init();
+    LED_Breath_Init();  // 初始化呼吸灯功能
     lcd_print_str(1, 0, "LED Init OK");
     
     // 按键初始化
@@ -442,6 +443,34 @@ void Alarm_Check(void)
                             alarm_status.humi_high_alarm || alarm_status.humi_low_alarm ||
                             alarm_status.light_low_alarm || alarm_status.smoke_high_alarm;
     
+    // 温度报警控制（LED0常亮）
+    if (alarm_status.temp_high_alarm || alarm_status.temp_low_alarm) {
+        Led_On(LED0);  // LED0常亮
+    } else {
+        Led_Off(LED0);
+    }
+    
+    // 湿度报警控制（LED1常亮）
+    if (alarm_status.humi_high_alarm || alarm_status.humi_low_alarm) {
+        Led_On(LED1);  // LED1常亮
+    } else {
+        Led_Off(LED1);
+    }
+    
+    // 光照报警控制（LED2呼吸灯 - PE13/TIM1_CH3）
+    if (alarm_status.light_low_alarm) {
+        LED_Breath_Enable(LED2);  // 启用LED2呼吸灯效果
+    } else {
+        LED_Breath_Disable(LED2);
+    }
+    
+    // 烟雾报警控制（LED3呼吸灯 - PE14/TIM1_CH4）
+    if (alarm_status.smoke_high_alarm) {
+        LED_Breath_Enable(LED3);  // 启用LED3呼吸灯效果
+    } else {
+        LED_Breath_Disable(LED3);
+    }
+    
     // 蜂鸣器报警
     if(alarm_status.any_alarm)
     {
@@ -662,11 +691,16 @@ int main(void)
     // 主循环
     while(1)
     {
-        // LED闪烁指示系统运行
+        // 系统运行指示（如果没有温度报警时才闪烁LED0）
         if(system_tick % 1000 == 0)
         {
-            Led_Toggle(LED0);
+            if(!alarm_status.temp_high_alarm && !alarm_status.temp_low_alarm) {
+                Led_Toggle(LED0);
+            }
         }
+        
+        // 处理呼吸灯效果
+        LED_Breath_Process();
         
         // 蓝牙处理
         Bluetooth_Handler(); // 蓝牙接收和命令分发

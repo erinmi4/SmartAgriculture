@@ -34,6 +34,12 @@ void Led_On(uint16_t Led_Num);
 void Led_Off(uint16_t Led_Num);
 void Led_Toggle(uint16_t Led_Num);
 
+// 呼吸灯相关函数
+void LED_Breath_Init(void);
+void LED_Breath_Enable(uint16_t Led_Num);
+void LED_Breath_Disable(uint16_t Led_Num);
+void LED_Breath_Process(void);
+
 #endif /* __LED_H */
 
 
