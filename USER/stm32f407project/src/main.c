@@ -1,7 +1,7 @@
 /* =================== 调试开关 =================== */
 // 如果出现卡死问题，可以逐个禁用模块进行排查
 #define ENABLE_DHT11     1    // 1-启用DHT11, 0-禁用DHT11 (先禁用排查)
-#define ENABLE_MPU6050   0    // 1-启用MPU6050, 0-禁用MPU6050 (先禁用排查)
+#define ENABLE_MPU6050   1    // 1-启用MPU6050, 0-禁用MPU6050 (先禁用排查)
 #define ENABLE_MQ2       1    // 1-启用MQ2, 0-禁用MQ2  
 #define ENABLE_LIGHT     1    // 1-启用光敏电阻, 0-禁用光敏电阻
 
@@ -22,6 +22,7 @@
 #include "uart.h"
 #include <stdio.h>
 #include <string.h>
+#include <math.h>
 
 /* =================== 缺失函数声明 =================== */
 // 注：实际的函数名在对应的头文件中定义
@@ -56,6 +57,17 @@ uint16_t SMOKE_HIGH_THRESHOLD = DEFAULT_SMOKE_HIGH_THRESHOLD;
 #define BT_CMD_SET_HUMI_LOW     "04"    // 设置湿度低阈值
 #define BT_CMD_SET_LIGHT_LOW    "05"    // 设置光照低阈值
 #define BT_CMD_SET_SMOKE_HIGH   "06"    // 设置烟雾高阈值
+
+// MPU6050数据结构定义
+typedef struct {
+    float accel_x;      // X轴加速度
+    float accel_y;      // Y轴加速度
+    float accel_z;      // Z轴加速度
+    float gyro_x;       // X轴角速度
+    float gyro_y;       // Y轴角速度
+    float gyro_z;       // Z轴角速度
+    float temp;         // 温度
+} MPU6050_Data_t;
 
 // 页面枚举
 typedef enum {
@@ -134,6 +146,7 @@ uint16_t UserBluetoothParseValue(const char* str);
 void CustomBluetoothSendString(const char* str);
 void ProcessReceivedCommand(const char* command);
 void SendSystemStatus(void);
+void MPU6050_GetData(MPU6050_Data_t *mpu_data);
 
 /* =================== 第1步：系统和传感器初始化 =================== */
 void System_Init(void)
@@ -264,14 +277,34 @@ void Sensors_Init(void)
 #if ENABLE_MPU6050
     // MPU6050初始化
     lcd_print_str(1, 0, "MPU6050...");
-    if(MPU6050_Init() == 0)
+    Mdelay_Lib(100); // 确保LCD显示刷新
+    
+    // 调试信息：开始初始化MPU6050
+    sensor_data.error_count++; // 暂时增加错误计数，成功后减回来
+    
+    // 原始的MPU6050_Init函数无返回值，我们自己进行初始化并判断
+    MPU6050_Init();
+    Mdelay_Lib(200); // 给MPU6050一些时间稳定
+    
+    // 简单读取一些数据来验证MPU6050是否工作正常
+    int16_t ax = 0, ay = 0, az = 0;
+    MPU6050_Read_Accel(&ax, &ay, &az);
+    
+    char debug_str[30];
+    sprintf(debug_str, "MPU:%d,%d,%d", ax, ay, az);
+    lcd_print_str(1, 0, debug_str);
+    Mdelay_Lib(1000); // 显示原始值用于调试
+    
+    // 如果加速度数据不全为0，则认为初始化成功
+    if(ax != 0 || ay != 0 || az != 0)
     {
         sensor_data.mpu_status = 1;
+        sensor_data.error_count--; // 成功，减回错误计数
         lcd_print_str(1, 0, "MPU6050 OK");
     }
     else
     {
-        sensor_data.error_count++;
+        sensor_data.mpu_status = 0;
         lcd_print_str(1, 0, "MPU6050 Failed");
     }
     Mdelay_Lib(1000);
@@ -527,15 +560,56 @@ void Display_Update(void)
             break;
             
         case PAGE_ATTITUDE:
+        {
+            // 计算Roll和Pitch角度
+            float roll = 0, pitch = 0;
+            // 计算姿态角（基于加速度计数据）
+            if(sensor_data.mpu_status) {
+                // atan2函数需要单精度float参数，计算角度
+                roll = atan2f(sensor_data.mpu_data.accel_y, sensor_data.mpu_data.accel_z) * 57.29578f; // 180/π ≈ 57.29578
+                pitch = atan2f(-sensor_data.mpu_data.accel_x, 
+                             sqrtf(sensor_data.mpu_data.accel_y*sensor_data.mpu_data.accel_y + 
+                                  sensor_data.mpu_data.accel_z*sensor_data.mpu_data.accel_z)) * 57.29578f;
+            }
+            
+            // 标题显示MPU6050状态
             lcd_print_str(0, 0, "=== MPU6050 ===");
-            sprintf(str, "X:%.1f Y:%.1f Z:%.1f", 
-                    sensor_data.mpu_data.accel_x,
-                    sensor_data.mpu_data.accel_y,
-                    sensor_data.mpu_data.accel_z);
+            
+            // 循环显示不同的数据
+            static uint8_t mpu_display_mode = 0;
+            static uint32_t last_mpu_switch = 0;
+            
+            // 每2秒切换显示内容
+            if(system_tick - last_mpu_switch >= 2000) {
+                last_mpu_switch = system_tick;
+                mpu_display_mode = (mpu_display_mode + 1) % 3;
+            }
+            
+            // 根据显示模式选择不同的数据显示
+            switch(mpu_display_mode) {
+                case 0: // 显示加速度数据
+                    sprintf(str, "A:%.1f %.1f %.1f", 
+                            sensor_data.mpu_data.accel_x,
+                            sensor_data.mpu_data.accel_y,
+                            sensor_data.mpu_data.accel_z);
+                    break;
+                case 1: // 显示陀螺仪数据
+                    sprintf(str, "G:%.1f %.1f %.1f",
+                            sensor_data.mpu_data.gyro_x,
+                            sensor_data.mpu_data.gyro_y,
+                            sensor_data.mpu_data.gyro_z);
+                    break;
+                case 2: // 显示角度数据
+                    sprintf(str, "R:%.1f P:%.1f", roll, pitch);
+                    break;
+            }
+            
             lcd_print_str(1, 0, str);
             break;
+        }
             
         case PAGE_SYSTEM_INFO:
+        {
             lcd_print_str(0, 0, "=== System Info ===");
             // 添加MQ2调试信息显示
             static uint8_t debug_mode = 0;
@@ -572,6 +646,7 @@ void Display_Update(void)
             }
             lcd_print_str(1, 0, str);
             break;
+        }
     }
 }
 
@@ -801,8 +876,46 @@ void SendSystemStatus(void)
             sensor_data.smoke_ppm_value, SMOKE_HIGH_THRESHOLD);
     Bluetooth_SendString(status);
     
+    // MPU6050数据
+    if (sensor_data.mpu_status)
+    {
+        Bluetooth_SendString("\r\nMPU6050 Data:\r\n");
+        
+        // 加速度数据
+        sprintf(status, "Accel: X:%.2f Y:%.2f Z:%.2f g\r\n", 
+                sensor_data.mpu_data.accel_x,
+                sensor_data.mpu_data.accel_y, 
+                sensor_data.mpu_data.accel_z);
+        Bluetooth_SendString(status);
+        
+        // 陀螺仪数据
+        sprintf(status, "Gyro: X:%.2f Y:%.2f Z:%.2f °/s\r\n", 
+                sensor_data.mpu_data.gyro_x,
+                sensor_data.mpu_data.gyro_y, 
+                sensor_data.mpu_data.gyro_z);
+        Bluetooth_SendString(status);
+        
+        // 姿态角计算
+        float roll = atan2f(sensor_data.mpu_data.accel_y, sensor_data.mpu_data.accel_z) * 57.29578f;
+        float pitch = atan2f(-sensor_data.mpu_data.accel_x, 
+                     sqrtf(sensor_data.mpu_data.accel_y*sensor_data.mpu_data.accel_y + 
+                          sensor_data.mpu_data.accel_z*sensor_data.mpu_data.accel_z)) * 57.29578f;
+        
+        // 姿态角
+        sprintf(status, "Attitude: Roll:%.2f° Pitch:%.2f°\r\n", roll, pitch);
+        Bluetooth_SendString(status);
+        
+        // MPU6050温度
+        sprintf(status, "Temp: %.2f°C\r\n", sensor_data.mpu_data.temp);
+        Bluetooth_SendString(status);
+    }
+    else
+    {
+        Bluetooth_SendString("\r\nMPU6050: Not Available\r\n");
+    }
+    
     // 报警状态
-    Bluetooth_SendString("Alarms: ");
+    Bluetooth_SendString("\r\nAlarms: ");
     if(alarm_status.any_alarm)
     {
         if(alarm_status.temp_high_alarm) Bluetooth_SendString("T-HIGH ");
@@ -830,4 +943,39 @@ void SendSystemStatus(void)
 void CustomBluetoothSendString(const char* str)
 {
     Bluetooth_SendString((char*)str);
+}
+
+/**
+ * @brief 获取MPU6050所有数据
+ * @param mpu_data: 指向MPU6050_Data_t结构体的指针，用于存储读取的数据
+ * @retval None
+ */
+void MPU6050_GetData(MPU6050_Data_t *mpu_data)
+{
+    int16_t ax, ay, az, gx, gy, gz;
+    uint8_t buf[2];
+    
+    // 读取加速度计数据
+    MPU6050_Read_Accel(&ax, &ay, &az);
+    
+    // 读取陀螺仪数据
+    MPU6050_Read_Gyro(&gx, &gy, &gz);
+    
+    // 读取温度数据
+    MPU6050_Read_Multiple(0x41, buf, 2); // 温度寄存器地址为0x41
+    int16_t temp_raw = (buf[0] << 8) | buf[1];
+    
+    // 转换原始数据为工程单位
+    // 加速度: ±2g量程时，LSB灵敏度为16384 LSB/g
+    mpu_data->accel_x = (float)ax / 16384.0f;
+    mpu_data->accel_y = (float)ay / 16384.0f;
+    mpu_data->accel_z = (float)az / 16384.0f;
+    
+    // 陀螺仪: ±250°/s量程时，LSB灵敏度为131 LSB/(°/s)
+    mpu_data->gyro_x = (float)gx / 131.0f;
+    mpu_data->gyro_y = (float)gy / 131.0f;
+    mpu_data->gyro_z = (float)gz / 131.0f;
+    
+    // 温度: 温度换算公式 T = (TEMP_OUT/340) + 36.53
+    mpu_data->temp = (float)temp_raw / 340.0f + 36.53f;
 }

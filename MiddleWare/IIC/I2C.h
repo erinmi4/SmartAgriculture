@@ -3,10 +3,14 @@
 
 #include "stm32f4xx.h"
 
-/* 鍑芥暟澹版槑 */
-void MyI2C_Init(void);
-uint8_t MyI2C_WriteReg(uint8_t addr, uint8_t reg, uint8_t data);
-uint8_t MyI2C_ReadReg(uint8_t addr, uint8_t reg);
-void MyI2C_ReadMultiReg(uint8_t addr, uint8_t reg, uint8_t *buf, uint8_t len);
+// 初始化I2C接口
+void My_I2C_Init(void);
+// 向I2C设备写入一个字节
+void I2C_Write_Byte(uint8_t addr, uint8_t reg, uint8_t data);
+// 从I2C设备读取一个字节
+uint8_t I2C_Read_Byte(uint8_t addr, uint8_t reg);
+// 从I2C设备读取多个字节
+void I2C_Read_Multiple(uint8_t addr, uint8_t reg, uint8_t *buf, uint8_t len);
 
-#endif /* __I2C_H */
+#endif
+
