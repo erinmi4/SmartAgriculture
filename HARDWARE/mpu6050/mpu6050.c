@@ -1,237 +1,103 @@
 #include "mpu6050.h"
-#include "i2c.h"
-#include "delay.h"
-#include <math.h>
+#include "I2C.h"  // Ê¹ÓÃ´óĞ´µÄI2C.h£¨Æ¥ÅäÄãĞŞ¸ÄµÄÎÄ¼şÃû£©
 
-/**
- * @brief MPU6050å†™å¯„å­˜å™¨
- * @param reg  å¯„å­˜å™¨åœ°å€
- * @param data è¦å†™å…¥çš„æ•°æ®
- * @retval 0-æˆåŠŸï¼Œå…¶ä»–-å¤±è´¥
- */
-uint8_t MPU6050_WriteReg(uint8_t reg, uint8_t data)
-{
-    return MyI2C_WriteReg(MPU6050_ADDR, reg, data);
-}
-
-/**
- * @brief MPU6050è¯»å¯„å­˜å™¨
- * @param reg å¯„å­˜å™¨åœ°å€
- * @retval è¯»å–åˆ°çš„æ•°æ®
- */
-uint8_t MPU6050_ReadReg(uint8_t reg)
-{
-    return MyI2C_ReadReg(MPU6050_ADDR, reg);
-}
-
-/**
- * @brief MPU6050è¿ç»­è¯»å–å¤šä¸ªå¯„å­˜å™¨
- * @param reg èµ·å§‹å¯„å­˜å™¨åœ°å€
- * @param buf æ•°æ®ç¼“å†²åŒº
- * @param len è¯»å–é•¿åº¦
- * @retval None
- */
-void MPU6050_ReadMultiReg(uint8_t reg, uint8_t *buf, uint8_t len)
-{
-    MyI2C_ReadMultiReg(MPU6050_ADDR, reg, buf, len);
-}
-
-/**
- * @brief  MPU6050åˆå§‹åŒ–
- * @param  None
- * @retval 0-æˆåŠŸ, 1-å¤±è´¥
- */
+// ³õÊ¼»¯MPU6050£¬·µ»Ø0±íÊ¾³É¹¦£¨¼æÈİÔ­ÓĞÏµÍ³£©
 uint8_t MPU6050_Init(void)
 {
-    uint8_t res;
-    uint8_t retry_count = 0;
+    uint8_t temp;
     
-    /* åˆå§‹åŒ–ç¡¬ä»¶I2C */
-    MyI2C_Init();
-    
-    /* 1. åœ¨æ‰€æœ‰æ“ä½œå‰ï¼Œå…ˆå»¶æ—¶ä¸€å°æ®µæ—¶é—´è®©èŠ¯ç‰‡ç¨³å®š */
-    Mdelay_Lib(100);
-    
-    /* åˆå§‹åŒ–ä¸­æ–­å¼•è„š(å¯é€‰) */
-    GPIO_InitTypeDef GPIO_InitStructure;
-    RCC_AHB1PeriphClockCmd(MPU6050_INT_CLK, ENABLE);
-    
-    GPIO_InitStructure.GPIO_Pin = MPU6050_INT_PIN;
-    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN;
-    GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP;
-    GPIO_Init(MPU6050_INT_PORT, &GPIO_InitStructure);
-    
-    /* æ£€æµ‹MPU6050æ˜¯å¦å­˜åœ¨ */
-    for(retry_count = 0; retry_count < 5; retry_count++)
+    My_I2C_Init();  // ³õÊ¼»¯I2C½Ó¿Ú
+
+    // ¼ì²âMPU6050ÊÇ·ñ´æÔÚ
+    temp = MPU6050_Read_Byte(0x75);  // WHO_AM_I¼Ä´æÆ÷
+    if(temp != 0x68)  // MPU6050µÄWHO_AM_IÓ¦¸Ã·µ»Ø0x68
     {
-        res = MPU6050_ReadReg(MPU6050_RA_WHO_AM_I);
-        if(res == 0x68)
-        {
-            break; // æ‰¾åˆ°è®¾å¤‡
-        }
-        Mdelay_Lib(10);
+        return 1;  // ³õÊ¼»¯Ê§°Ü
     }
+
+    // »½ĞÑMPU6050
+    I2C_Write_Byte(MPU6050_ADDR, PWR_MGMT_1, 0x00);
+
+    // ÉèÖÃ²ÉÑùÂÊ
+    I2C_Write_Byte(MPU6050_ADDR, SMPLRT_DIV, 0x07);
+
+    // ÅäÖÃÍÓÂİÒÇºÍ¼ÓËÙ¶È¼ÆµÄµÍÍ¨ÂË²¨Æ÷
+    I2C_Write_Byte(MPU6050_ADDR, CONFIG, 0x00);
+
+    // ÅäÖÃÍÓÂİÒÇÁ¿³Ì£¨¡À250¡ã/s£©
+    I2C_Write_Byte(MPU6050_ADDR, GYRO_CONFIG, 0x00);
+
+    // ÅäÖÃ¼ÓËÙ¶È¼ÆÁ¿³Ì£¨¡À2g£©
+    I2C_Write_Byte(MPU6050_ADDR, ACCEL_CONFIG, 0x00);
+
+    // Ê¹ÄÜÖĞ¶Ï
+    I2C_Write_Byte(MPU6050_ADDR, INT_ENABLE, 0x01);
     
-    if(res != 0x68)
-    {
-        return 1; // è®¾å¤‡ä¸å­˜åœ¨
-    }
-    
-    /* 2. (å¯é€‰ä½†æ¨è) å‘é€å¤ä½å‘½ä»¤ */
-    MPU6050_WriteReg(MPU6050_RA_PWR_MGMT_1, 0x80);
-    
-    /* 3. å»¶æ—¶ï¼Œç­‰å¾…å¤ä½å®Œæˆ */
-    Mdelay_Lib(100);
-    
-    /* 4. (å¿…é¡») å”¤é†’MPU6050ï¼Œå¹¶é€‰æ‹©PLL X Gyroä½œä¸ºæ—¶é’Ÿæº */
-    MPU6050_WriteReg(MPU6050_RA_PWR_MGMT_1, 0x01);
-    
-    /* 5. (å¿…é¡») å»¶æ—¶ï¼Œç­‰å¾…æ—¶é’Ÿç¨³å®š */
-    Mdelay_Lib(10);
-    
-    /* 6. é…ç½®å…¶ä»–å¯„å­˜å™¨ */
-    /* è®¾ç½®é™€èºä»ªé‡‡æ ·ç‡: 1KHz */
-    MPU6050_WriteReg(MPU6050_RA_SMPLRT_DIV, 0x07);
-    Mdelay_Lib(5);
-    
-    /* é…ç½®æ•°å­—ä½é€šæ»¤æ³¢å™¨ */
-    MPU6050_WriteReg(MPU6050_RA_CONFIG, 0x06);
-    Mdelay_Lib(5);
-    
-    /* é…ç½®åŠ é€Ÿåº¦ä¼ æ„Ÿå™¨å·¥ä½œåœ¨Â±2gæ¨¡å¼ */
-    MPU6050_WriteReg(MPU6050_RA_ACCEL_CONFIG, 0x00);
-    Mdelay_Lib(5);
-    
-    /* é™€èºä»ªè‡ªæ£€åŠæµ‹é‡èŒƒå›´ï¼Œå…¸å‹å€¼ï¼š0x18(ä¸è‡ªæ£€ï¼ŒÂ±2000dps) */
-    MPU6050_WriteReg(MPU6050_RA_GYRO_CONFIG, 0x18);
-    Mdelay_Lib(5);
-    
-    /* å†æ¬¡éªŒè¯è®¾å¤‡ID */
-    res = MPU6050_ReadReg(MPU6050_RA_WHO_AM_I);
-    if(res != 0x68)
-    {
-        return 1; // éªŒè¯å¤±è´¥
-    }
-    
-    return 0;
+    return 0;  // ³õÊ¼»¯³É¹¦
 }
 
-/**
- * @brief  è·å–MPU6050è®¾å¤‡ID
- * @param  None
- * @retval è®¾å¤‡ID
- */
-uint8_t MPU6050_GetDeviceID(void)
+// ¶ÁÈ¡MPU6050¼Ä´æÆ÷Êı¾İ
+uint8_t MPU6050_Read_Byte(uint8_t reg)
 {
-    return MPU6050_ReadReg(MPU6050_RA_WHO_AM_I);
+    return I2C_Read_Byte(MPU6050_ADDR, reg);
 }
 
-/**
- * @brief  è·å–MPU6050åŸå§‹æ•°æ®
- * @param  raw_data: åŸå§‹æ•°æ®ç»“æ„ä½“æŒ‡é’ˆ
- * @retval None
- */
-void MPU6050_GetRawData(MPU6050_RawData_t *raw_data)
+// ¶ÁÈ¡MPU6050¶à×Ö½ÚÊı¾İ
+void MPU6050_Read_Multiple(uint8_t reg, uint8_t *buf, uint8_t len)
 {
-    uint8_t buf[14];
-    
-    /* è¿ç»­è¯»å–14ä¸ªå­—èŠ‚ */
-    MPU6050_ReadMultiReg(MPU6050_RA_ACCEL_XOUT_H, buf, 14);
-    
-    /* ç»„åˆæ•°æ® */
-    raw_data->accel_x = (buf[0] << 8) | buf[1];
-    raw_data->accel_y = (buf[2] << 8) | buf[3];
-    raw_data->accel_z = (buf[4] << 8) | buf[5];
-    raw_data->temp = (buf[6] << 8) | buf[7];
-    raw_data->gyro_x = (buf[8] << 8) | buf[9];
-    raw_data->gyro_y = (buf[10] << 8) | buf[11];
-    raw_data->gyro_z = (buf[12] << 8) | buf[13];
+    I2C_Read_Multiple(MPU6050_ADDR, reg, buf, len);
 }
 
-/**
- * @brief  è·å–MPU6050è½¬æ¢åçš„æ•°æ®
- * @param  data: è½¬æ¢åæ•°æ®ç»“æ„ä½“æŒ‡é’ˆ
- * @retval None
- */
-void MPU6050_GetData(MPU6050_Data_t *data)
-{
-    MPU6050_RawData_t raw_data;
-    
-    /* è·å–åŸå§‹æ•°æ® */
-    MPU6050_GetRawData(&raw_data);
-    
-    /* è½¬æ¢åŠ é€Ÿåº¦æ•°æ® (é‡ç¨‹Â±2gï¼Œçµæ•åº¦16384 LSB/g) */
-    data->accel_x = (float)raw_data.accel_x / 16384.0f;
-    data->accel_y = (float)raw_data.accel_y / 16384.0f;
-    data->accel_z = (float)raw_data.accel_z / 16384.0f;
-    
-    /* è½¬æ¢æ¸©åº¦æ•°æ® */
-    data->temp = (float)raw_data.temp / 340.0f + 36.53f;
-    
-    /* è½¬æ¢é™€èºä»ªæ•°æ® (é‡ç¨‹Â±2000Â°/sï¼Œçµæ•åº¦16.4 LSB/(Â°/s)) */
-    data->gyro_x = (float)raw_data.gyro_x / 16.4f;
-    data->gyro_y = (float)raw_data.gyro_y / 16.4f;
-    data->gyro_z = (float)raw_data.gyro_z / 16.4f;
-}
-
-/**
- * @brief  è·å–åŠ é€Ÿåº¦æ•°æ®
- * @param  ax: Xè½´åŠ é€Ÿåº¦æŒ‡é’ˆ
- * @param  ay: Yè½´åŠ é€Ÿåº¦æŒ‡é’ˆ
- * @param  az: Zè½´åŠ é€Ÿåº¦æŒ‡é’ˆ
- * @retval None
- */
-void MPU6050_GetAccel(int16_t *ax, int16_t *ay, int16_t *az)
+// ¶ÁÈ¡¼ÓËÙ¶È¼ÆÊı¾İ
+void MPU6050_Read_Accel(int16_t *ax, int16_t *ay, int16_t *az)
 {
     uint8_t buf[6];
-    
-    // é€ä¸ªè¯»å–å¯„å­˜å™¨ï¼Œæ›´å¯é 
-    buf[0] = MPU6050_ReadReg(MPU6050_RA_ACCEL_XOUT_H);
-    buf[1] = MPU6050_ReadReg(MPU6050_RA_ACCEL_XOUT_L);
-    buf[2] = MPU6050_ReadReg(MPU6050_RA_ACCEL_YOUT_H);
-    buf[3] = MPU6050_ReadReg(MPU6050_RA_ACCEL_YOUT_L);
-    buf[4] = MPU6050_ReadReg(MPU6050_RA_ACCEL_ZOUT_H);
-    buf[5] = MPU6050_ReadReg(MPU6050_RA_ACCEL_ZOUT_L);
-    
+    MPU6050_Read_Multiple(ACCEL_XOUT_H, buf, 6);
     *ax = (buf[0] << 8) | buf[1];
     *ay = (buf[2] << 8) | buf[3];
     *az = (buf[4] << 8) | buf[5];
 }
 
-/**
- * @brief  è·å–é™€èºä»ªæ•°æ®
- * @param  gx: Xè½´è§’é€Ÿåº¦æŒ‡é’ˆ
- * @param  gy: Yè½´è§’é€Ÿåº¦æŒ‡é’ˆ
- * @param  gz: Zè½´è§’é€Ÿåº¦æŒ‡é’ˆ
- * @retval None
- */
-void MPU6050_GetGyro(int16_t *gx, int16_t *gy, int16_t *gz)
+// ¶ÁÈ¡ÍÓÂİÒÇÊı¾İ
+void MPU6050_Read_Gyro(int16_t *gx, int16_t *gy, int16_t *gz)
 {
     uint8_t buf[6];
-    
-    // é€ä¸ªè¯»å–å¯„å­˜å™¨ï¼Œæ›´å¯é 
-    buf[0] = MPU6050_ReadReg(MPU6050_RA_GYRO_XOUT_H);
-    buf[1] = MPU6050_ReadReg(MPU6050_RA_GYRO_XOUT_L);
-    buf[2] = MPU6050_ReadReg(MPU6050_RA_GYRO_YOUT_H);
-    buf[3] = MPU6050_ReadReg(MPU6050_RA_GYRO_YOUT_L);
-    buf[4] = MPU6050_ReadReg(MPU6050_RA_GYRO_ZOUT_H);
-    buf[5] = MPU6050_ReadReg(MPU6050_RA_GYRO_ZOUT_L);
-    
+    MPU6050_Read_Multiple(GYRO_XOUT_H, buf, 6);
     *gx = (buf[0] << 8) | buf[1];
     *gy = (buf[2] << 8) | buf[3];
     *gz = (buf[4] << 8) | buf[5];
 }
 
-/**
- * @brief  è·å–æ¸©åº¦æ•°æ®
- * @param  None
- * @retval æ¸©åº¦åŸå§‹æ•°æ®
- */
-int16_t MPU6050_GetTemp(void)
+// ¶ÁÈ¡ÎÂ¶ÈÊı¾İ
+int16_t MPU6050_Read_Temp(void)
 {
     uint8_t buf[2];
-    
-    MPU6050_ReadMultiReg(MPU6050_RA_TEMP_OUT_H, buf, 2);
-    
+    MPU6050_Read_Multiple(TEMP_OUT_H, buf, 2);
     return (buf[0] << 8) | buf[1];
 }
+
+// ¼æÈİÔ­ÓĞÏµÍ³µÄÊı¾İ»ñÈ¡º¯Êı
+void MPU6050_GetData(MPU6050_Data_t *data)
+{
+    int16_t ax, ay, az, gx, gy, gz, temp;
+    
+    // ¶ÁÈ¡Ô­Ê¼Êı¾İ
+    MPU6050_Read_Accel(&ax, &ay, &az);
+    MPU6050_Read_Gyro(&gx, &gy, &gz);
+    temp = MPU6050_Read_Temp();
+    
+    // ×ª»»Îª¸¡µãÊı£¨¸ù¾İÁ¿³ÌÅäÖÃ½øĞĞËõ·Å£©
+    // ¼ÓËÙ¶È¼Æ£º¡À2g£¬LSB Sensitivity = 16384 LSB/g
+    data->accel_x = (float)ax / 16384.0f;
+    data->accel_y = (float)ay / 16384.0f;
+    data->accel_z = (float)az / 16384.0f;
+    
+    // ÍÓÂİÒÇ£º¡À250¡ã/s£¬LSB Sensitivity = 131 LSB/(¡ã/s)
+    data->gyro_x = (float)gx / 131.0f;
+    data->gyro_y = (float)gy / 131.0f;
+    data->gyro_z = (float)gz / 131.0f;
+    
+    // ÎÂ¶È£ºTemperature in degrees C = (TEMP_OUT Register Value as a signed quantity)/340 + 36.53
+    data->temp = (float)temp / 340.0f + 36.53f;
+}
+

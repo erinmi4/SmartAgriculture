@@ -24,14 +24,7 @@ void Bluetooth_Init(void)
     bt_recv_index = 0;
     
     // 简化初始化，移除可能导致阻塞的发送操作
-    // 注释掉初始化发送消息，避免系统启动时卡死
-    /*
-    Bluetooth_SendString("=== STM32 Smart Agriculture System ===\r\n");
-    Bluetooth_SendString("Commands: 1-6(Set Thresholds) 7(Enable&Test) 8(Disable) 9(Status) 0(Reset)\r\n");
-    Bluetooth_SendString("1-TempH35 2-TempL15 3-HumiH80 4-HumiL30 5-LightL30 6-SmokeH200\r\n");
-    Bluetooth_SendString("7-EnableAlarm 8-DisableAlarm 9-Status 0-ResetDefaults\r\n");
-    Bluetooth_SendString("Ready for Commands!\r\n");
-    */
+    // 蓝牙初始化消息将由main.c在系统初始化完成后发送
 }
 
 /**
