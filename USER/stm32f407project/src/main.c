@@ -1,12 +1,12 @@
 /* =================== 调试开关 =================== */
 // 如果出现卡死问题，可以逐个禁用模块进行排查
-#define ENABLE_DHT11       1    // 1-启用DHT11, 0-禁用DHT11 (先禁用排查)
+#define ENABLE_DHT11       0    // 1-启用DHT11, 0-禁用DHT11 (先禁用排查)
 #define ENABLE_MPU6050     0    // 1-启用MPU6050, 0-禁用MPU6050 (先禁用排查)
-#define ENABLE_MQ2         1    // 1-启用MQ2, 0-禁用MQ2  
-#define ENABLE_LIGHT       1    // 1-启用光敏电阻, 0-禁用光敏电阻
+#define ENABLE_MQ2         0    // 1-启用MQ2, 0-禁用MQ2  
+#define ENABLE_LIGHT       0    // 1-启用光敏电阻, 0-禁用光敏电阻
 #define ENABLE_BLUETOOTH   1    // 1-启用蓝牙, 0-禁用蓝牙
-#define ENABLE_BREATHING   1    // 1-启用呼吸灯, 0-禁用呼吸灯
-#define ENABLE_ALARM       1    // 1-启用报警, 0-禁用报警
+#define ENABLE_BREATHING   0    // 1-启用呼吸灯, 0-禁用呼吸灯
+#define ENABLE_ALARM       0    // 1-启用报警, 0-禁用报警
 
 /* =================== 头文件包含 =================== */
 #include "stm32f4xx.h"
@@ -44,14 +44,18 @@
 #define SMOKE_HIGH_THRESHOLD 120   // 烟雾高报警阈值(ppm) - 方便演示取120
 
 /* =================== 蓝牙参数化命令定义 =================== */
-// 参数化命令格式: "CMD:VALUE"，例如 "TH:30" 设置温度高阈值为30
+// 简化命令格式: 单个数字命令，例如 "1" 设置温度高阈值为35℃
 // 支持的命令:
-// TH:xx - 设置温度高阈值
-// TL:xx - 设置温度低阈值  
-// HH:xx - 设置湿度高阈值
-// HL:xx - 设置湿度低阈值
-// LL:xx - 设置光照低阈值
-// SH:xx - 设置烟雾高阈值
+// 1 - 设置温度高阈值为35℃
+// 2 - 设置温度低阈值为15℃  
+// 3 - 设置湿度高阈值为80%
+// 4 - 设置湿度低阈值为30%
+// 5 - 设置光照低阈值为30%
+// 6 - 设置烟雾高阈值为200ppm
+// 7 - 强制触发报警测试
+// 8 - 关闭所有报警
+// 9 - 查询当前状态
+// 0 - 恢复默认阈值
 
 #define BT_CMD_BUFFER_SIZE      20     // 蓝牙命令缓冲区大小
 
@@ -131,7 +135,8 @@ SensorData_t sensor_data = {0};
 AlarmStatus_t alarm_status = {0};
 PageType_t current_page = PAGE_TEMP_HUMID;
 PageType_t previous_page = PAGE_SYSTEM_INFO; // 初始化为不同值，强制第一次刷新
-uint32_t system_tick = 0;
+volatile uint32_t system_tick = 0;           // 改为volatile，由SysTick中断更新，供delay.c访问
+uint8_t alarm_disabled = 0;                // 报警禁用标志（命令8使用）
 
 // 动态阈值实例 - 初始化为默认值
 Thresholds_t thresholds = {
@@ -165,21 +170,34 @@ void Bluetooth_ParseCommand(char* command);      // 参数化命令解析
 void LCD_ShowNotification(char* message, uint32_t duration);  // 显示LCD提示
 void LCD_UpdateNotification(void);               // 更新LCD提示状态
 
+/* =================== 系统时钟相关 =================== */
+// 非阻塞延时函数
+void delay_ms_non_blocking(uint32_t ms)
+{
+    static uint32_t start_time = 0;
+    start_time = system_tick;
+    while((system_tick - start_time) < ms)
+    {
+        // 非阻塞等待
+    }
+}
+
 /* =================== 第1步：系统和传感器初始化 =================== */
 void System_Init(void)
 {
     // 系统时钟初始化
     SystemInit();
     
-    // 延时初始化 - 删除不存在的delay_init
-    // delay_init(168);  // 168MHz系统时钟
+    // 配置SysTick定时器，1ms中断一次
+    SysTick_Config(SystemCoreClock / 1000);
+    NVIC_SetPriority(SysTick_IRQn, 0);  // 设置最高优先级
     
     // LCD初始化并显示欢迎信息
     lcd_init();
     lcd_clear();
     lcd_print_str(0, 0, "Smart Agriculture");
     lcd_print_str(1, 0, "Initializing...");
-    Mdelay_Lib(1000);
+    delay_ms_non_blocking(1000);
     
     // LED初始化
     Led_Init();
@@ -188,7 +206,7 @@ void System_Init(void)
     // 呼吸灯初始化
     lcd_print_str(1, 0, "Breathing LED...");
     Led_BreathingInit();
-    Mdelay_Lib(500);
+    delay_ms_non_blocking(500);
 #endif
     
     // 按键初始化
@@ -208,20 +226,31 @@ void System_Init(void)
     bt_state.enabled = 1;
     
     // 发送启动确认消息（参考main_bluetooth.c）
-    Mdelay_Lib(100);  // 等待蓝牙模块稳定
-    Bluetooth_SendString("Smart Agriculture v2.0\r\n");
-    Bluetooth_SendString("Bluetooth Ready!\r\n");
-    Bluetooth_SendString("Commands: TH:30 TL:20 HH:70 HL:40 LL:40 SH:150 ST:0\r\n");
+    delay_ms_non_blocking(100);  // 等待蓝牙模块稳定
     
-    Mdelay_Lib(500);
+    // 简化初始化消息，专注于调试
+    lcd_print_str(1, 0, "BT Sending...");
+    Bluetooth_SendString("=== BT TEST START ===\r\n");
+    delay_ms_non_blocking(100);
+    
+    Bluetooth_SendString("Smart Agriculture v2.0\r\n");
+    delay_ms_non_blocking(100);
+    
+    Bluetooth_SendString("Commands: 1-9, 0\r\n");
+    delay_ms_non_blocking(100);
+    
+    Bluetooth_SendString("=== BT TEST END ===\r\n");
+    lcd_print_str(1, 0, "BT Init Done");
+    
+    delay_ms_non_blocking(500);
 #else
     lcd_print_str(1, 0, "BT Disabled");
     bt_state.enabled = 0;
-    Mdelay_Lib(500);
+    delay_ms_non_blocking(500);
 #endif
     
     lcd_print_str(1, 0, "System OK");
-    Mdelay_Lib(500);
+    delay_ms_non_blocking(500);
 }
 
 void Sensors_Init(void)
@@ -251,27 +280,27 @@ void Sensors_Init(void)
 #else
     lcd_print_str(1, 0, "DHT11 Disabled");
     sensor_data.dht11_status = 0;
-    Mdelay_Lib(500);
+    delay_ms_non_blocking(100);
 #endif
 
 #if ENABLE_LIGHT
     // 光敏电阻初始化
     lcd_print_str(1, 0, "Light Sensor...");
     Light_Init();
-    Mdelay_Lib(500);
+    delay_ms_non_blocking(100);
 #endif
 
 #if ENABLE_MQ2
     // MQ-2烟雾传感器初始化
     lcd_print_str(1, 0, "MQ2 Sensor...");
     MQ2_Init();
-    Mdelay_Lib(1000);  // MQ2需要更长的初始化时间
+    delay_ms_non_blocking(200);  // MQ2需要更长的初始化时间
     
     // 测试MQ2通信
     lcd_print_str(1, 0, "Testing MQ2...");
     MQ2_ClearFlag();
     MQ2_SendCommand();
-    Mdelay_Lib(500);  // 等待响应
+    delay_ms_non_blocking(100);  // 等待响应
     
     if(MQ2_IsDataReady())
     {
@@ -284,7 +313,7 @@ void Sensors_Init(void)
         lcd_print_str(1, 0, "MQ2 No Response");
         sensor_data.error_count++;
     }
-    Mdelay_Lib(1000);
+    delay_ms_non_blocking(500);
 #endif
 
 #if ENABLE_MPU6050
@@ -300,17 +329,17 @@ void Sensors_Init(void)
         sensor_data.error_count++;
         lcd_print_str(1, 0, "MPU6050 Failed");
     }
-    Mdelay_Lib(1000);
+    delay_ms_non_blocking(500);
 #else
     lcd_print_str(1, 0, "MPU6050 Disabled");
     sensor_data.mpu_status = 0;
-    Mdelay_Lib(500);
+    delay_ms_non_blocking(100);
 #endif
     
     // 初始化完成
     sprintf(str, "Init Complete!");
     lcd_print_str(1, 0, str);
-    Mdelay_Lib(1000);
+    delay_ms_non_blocking(500);
     
     // 清屏准备进入主循环显示
     lcd_clear();
@@ -367,10 +396,10 @@ void Data_Collection(void)
         
         // 等待数据就绪，但不要无限等待
         uint32_t wait_start = system_tick;
-        while(!MQ2_IsDataReady() && (system_tick - wait_start) < 200)
+        while(!MQ2_IsDataReady() && (system_tick - wait_start) < 50)
         {
-            // 最多等待200ms
-            Mdelay_Lib(1);
+            // 最多等待50ms，减少阻塞时间
+            // 不使用延时，直接检查
         }
         
         if(MQ2_IsDataReady())      // 检查数据是否就绪
@@ -415,6 +444,23 @@ void Data_Collection(void)
 /* =================== 第3步：报警检查 =================== */
 void Alarm_Check(void)
 {
+    // 如果报警被禁用，直接返回
+    if(alarm_disabled)
+    {
+        // 清除所有报警状态
+        alarm_status.temp_high_alarm = 0;
+        alarm_status.temp_low_alarm = 0;
+        alarm_status.humi_high_alarm = 0;
+        alarm_status.humi_low_alarm = 0;
+        alarm_status.light_low_alarm = 0;
+        alarm_status.smoke_high_alarm = 0;
+        alarm_status.any_alarm = 0;
+        
+        // 确保蜂鸣器关闭
+        Beep_Off();
+        return;
+    }
+    
     // 温度报警检查 - 使用动态阈值
     alarm_status.temp_high_alarm = (sensor_data.temperature > thresholds.temp_high);
     alarm_status.temp_low_alarm = (sensor_data.temperature < thresholds.temp_low);
@@ -636,9 +682,10 @@ void Display_Update(void)
             
         case PAGE_BLUETOOTH:
             lcd_print_str(0, 0, "=== Bluetooth ===");
-            sprintf(str, "BT:%s Cmd:%ld", 
+            sprintf(str, "BT:%s Cmd:%ld %s", 
                     bt_state.enabled ? "ON" : "OFF",
-                    bt_state.command_count);
+                    bt_state.command_count,
+                    alarm_disabled ? "DISABLED" : "ENABLED");
             lcd_print_str(1, 0, str);
             break;
             
@@ -714,81 +761,128 @@ void LCD_UpdateNotification(void)
 }
 
 /**
- * @brief 解析蓝牙参数化命令（参考main_bluetooth.c - 简洁版）
- * @param command: 命令字符串，格式如"TH:30"
+ * @brief 解析蓝牙数字命令（简化版 - 便于调试）
+ * @param command: 命令字符串，格式如"1"表示设置温度高阈值
  */
 void Bluetooth_ParseCommand(char* command)
 {
     char response[80];
-    
-    // 基本格式检查
-    if(strlen(command) < 4 || command[2] != ':')
-    {
-        Bluetooth_SendString("ERROR: Use format CMD:VALUE\r\n");
-        Bluetooth_SendString("Example: TH:30 TL:20 HH:70 HL:40 LL:40 SH:150\r\n");
-        return;
-    }
-    
-    // 提取命令和数值
-    char cmd[3] = {command[0], command[1], '\0'};
-    int value = atoi(&command[3]);
+    int cmd_num = atoi(command);  // 直接转换为数字
     
     // 发送解析确认
-    sprintf(response, "PARSING: %s=%d\r\n", cmd, value);
+    sprintf(response, "RECEIVED CMD: %d\r\n", cmd_num);
     Bluetooth_SendString(response);
     
-    // 根据命令设置阈值
-    if(strcmp(cmd, "TH") == 0 && value >= 0 && value <= 60)
+    // 根据数字命令执行对应操作
+    switch(cmd_num)
     {
-        thresholds.temp_high = value;
-        sprintf(response, "SUCCESS: TempHigh=%d\r\n", value);
-        LCD_ShowNotification("TempHigh Set", 2000);
-    }
-    else if(strcmp(cmd, "TL") == 0 && value >= 0 && value <= 60)
-    {
-        thresholds.temp_low = value;
-        sprintf(response, "SUCCESS: TempLow=%d\r\n", value);
-        LCD_ShowNotification("TempLow Set", 2000);
-    }
-    else if(strcmp(cmd, "HH") == 0 && value >= 0 && value <= 100)
-    {
-        thresholds.humi_high = value;
-        sprintf(response, "SUCCESS: HumiHigh=%d\r\n", value);
-        LCD_ShowNotification("HumiHigh Set", 2000);
-    }
-    else if(strcmp(cmd, "HL") == 0 && value >= 0 && value <= 100)
-    {
-        thresholds.humi_low = value;
-        sprintf(response, "SUCCESS: HumiLow=%d\r\n", value);
-        LCD_ShowNotification("HumiLow Set", 2000);
-    }
-    else if(strcmp(cmd, "LL") == 0 && value >= 0 && value <= 100)
-    {
-        thresholds.light_low = value;
-        sprintf(response, "SUCCESS: LightLow=%d\r\n", value);
-        LCD_ShowNotification("LightLow Set", 2000);
-    }
-    else if(strcmp(cmd, "SH") == 0 && value >= 0 && value <= 1000)
-    {
-        thresholds.smoke_high = value;
-        sprintf(response, "SUCCESS: SmokeHigh=%d\r\n", value);
-        LCD_ShowNotification("SmokeHigh Set", 2000);
-    }
-    else if(strcmp(cmd, "ST") == 0)  // 状态查询
-    {
-        sprintf(response, "STATUS: T=%dC H=%d%% L=%d%% S=%dppm Alarms=%s\r\n",
-                sensor_data.temperature, sensor_data.humidity, 
-                sensor_data.light_percent, sensor_data.smoke_ppm_value,
-                alarm_status.any_alarm ? "YES" : "NO");
-        Bluetooth_SendString(response);
-        return;
-    }
-    else
-    {
-        sprintf(response, "ERROR: Invalid command or range\r\n");
-        Bluetooth_SendString(response);
-        Bluetooth_SendString("Valid: TH:0-60 TL:0-60 HH:0-100 HL:0-100 LL:0-100 SH:0-1000 ST:0\r\n");
-        return;
+        case 1: // 设置温度高阈值为35℃
+            alarm_disabled = 0;  // 重新启用报警
+            thresholds.temp_high = 35;
+            sprintf(response, "SUCCESS: TempHigh=35C\r\n");
+            LCD_ShowNotification("TempHigh: 35C", 2000);
+            break;
+            
+        case 2: // 设置温度低阈值为15℃
+            alarm_disabled = 0;  // 重新启用报警
+            thresholds.temp_low = 15;
+            sprintf(response, "SUCCESS: TempLow=15C\r\n");
+            LCD_ShowNotification("TempLow: 15C", 2000);
+            break;
+            
+        case 3: // 设置湿度高阈值为80%
+            alarm_disabled = 0;  // 重新启用报警
+            thresholds.humi_high = 80;
+            sprintf(response, "SUCCESS: HumiHigh=80%%\r\n");
+            LCD_ShowNotification("HumiHigh: 80%", 2000);
+            break;
+            
+        case 4: // 设置湿度低阈值为30%
+            alarm_disabled = 0;  // 重新启用报警
+            thresholds.humi_low = 30;
+            sprintf(response, "SUCCESS: HumiLow=30%%\r\n");
+            LCD_ShowNotification("HumiLow: 30%", 2000);
+            break;
+            
+        case 5: // 设置光照低阈值为30%
+            alarm_disabled = 0;  // 重新启用报警
+            thresholds.light_low = 30;
+            sprintf(response, "SUCCESS: LightLow=30%%\r\n");
+            LCD_ShowNotification("LightLow: 30%", 2000);
+            break;
+            
+        case 6: // 设置烟雾高阈值为200ppm
+            alarm_disabled = 0;  // 重新启用报警
+            thresholds.smoke_high = 200;
+            sprintf(response, "SUCCESS: SmokeHigh=200ppm\r\n");
+            LCD_ShowNotification("SmokeHigh: 200ppm", 2000);
+            break;
+            
+        case 7: // 重新启用报警 & 强制测试
+            // 重新启用报警功能
+            alarm_disabled = 0;
+            
+            // 强制触发报警测试
+            alarm_status.temp_high_alarm = 1;
+            alarm_status.any_alarm = 1;
+            
+            sprintf(response, "SUCCESS: Alarm ENABLED & Test ON\r\n");
+            LCD_ShowNotification("Alarm ENABLED", 2000);
+            break;
+            
+        case 8: // 关闭所有报警
+            // 启用报警禁用标志，阻止Alarm_Check重新触发报警
+            alarm_disabled = 1;
+            
+            // 清零所有报警状态
+            alarm_status.temp_high_alarm = 0;
+            alarm_status.temp_low_alarm = 0;
+            alarm_status.humi_high_alarm = 0;
+            alarm_status.humi_low_alarm = 0;
+            alarm_status.light_low_alarm = 0;
+            alarm_status.smoke_high_alarm = 0;
+            alarm_status.any_alarm = 0;
+            
+            // 立即关闭蜂鸣器
+            Beep_Off();
+            
+            sprintf(response, "SUCCESS: All Alarms OFF (Disabled)\r\n");
+            LCD_ShowNotification("Alarms DISABLED", 2000);
+            break;
+            
+        case 9: // 查询当前状态
+            sprintf(response, "STATUS: T=%dC(%d-%d) H=%d%%(%d-%d) L=%d%%(%d) S=%dppm(%d) A=%s D=%s\r\n",
+                    sensor_data.temperature, thresholds.temp_low, thresholds.temp_high,
+                    sensor_data.humidity, thresholds.humi_low, thresholds.humi_high,
+                    sensor_data.light_percent, thresholds.light_low,
+                    sensor_data.smoke_ppm_value, thresholds.smoke_high,
+                    alarm_status.any_alarm ? "YES" : "NO",
+                    alarm_disabled ? "YES" : "NO");
+            Bluetooth_SendString(response);
+            return;
+            
+        case 0: // 恢复默认阈值
+            // 重新启用报警功能
+            alarm_disabled = 0;
+            
+            // 恢复默认阈值
+            thresholds.temp_high = TEMP_HIGH_THRESHOLD;
+            thresholds.temp_low = TEMP_LOW_THRESHOLD;
+            thresholds.humi_high = HUMI_HIGH_THRESHOLD;
+            thresholds.humi_low = HUMI_LOW_THRESHOLD;
+            thresholds.light_low = LIGHT_LOW_THRESHOLD;
+            thresholds.smoke_high = SMOKE_HIGH_THRESHOLD;
+            sprintf(response, "SUCCESS: Reset to defaults & Alarm ENABLED\r\n");
+            LCD_ShowNotification("Reset & ENABLED", 2000);
+            break;
+            
+        default:
+            sprintf(response, "ERROR: Unknown command %d\r\n", cmd_num);
+            Bluetooth_SendString(response);
+            Bluetooth_SendString("Valid commands: 0-9\r\n");
+            Bluetooth_SendString("1-TempH35 2-TempL15 3-HumiH80 4-HumiL30 5-LightL30\r\n");
+            Bluetooth_SendString("6-SmokeH200 7-EnableAlarm 8-DisableAlarm 9-Status 0-Reset\r\n");
+            return;
     }
     
     // 发送成功确认
@@ -803,27 +897,26 @@ void Bluetooth_ParseCommand(char* command)
 }
 
 /**
- * @brief 蓝牙命令处理主函数（参考main_bluetooth.c实现）
+ * @brief 蓝牙命令处理主函数（高性能调试版）
  */
 void Bluetooth_Handler(void)
 {
 #if ENABLE_BLUETOOTH
     static uint32_t last_bluetooth_check = 0;
     static uint32_t last_heartbeat = 0;
+    static uint32_t debug_counter = 0;
     
-    // 每100ms检查一次蓝牙命令（参考main_bluetooth.c）
-    if(system_tick - last_bluetooth_check >= 100)
+    // 每10ms检查一次蓝牙命令（提高响应速度）
+    if(system_tick - last_bluetooth_check >= 10)
     {
         last_bluetooth_check = system_tick;
+        debug_counter++;
         
-        // 每10秒发送一次心跳包，确认蓝牙连接正常
-        if(system_tick - last_heartbeat >= 10000)
+        // 每2秒发送一次简化心跳包用于调试（加快测试）
+        if(system_tick - last_heartbeat >= 2000)
         {
-            char heartbeat[60];
-            sprintf(heartbeat, "HEARTBEAT: T=%dC H=%d%% S=%dppm\r\n", 
-                    sensor_data.temperature, 
-                    sensor_data.humidity,
-                    sensor_data.smoke_ppm_value);
+            char heartbeat[40];
+            sprintf(heartbeat, "ALIVE: %ld\r\n", debug_counter / 100);  // 显示秒数
             Bluetooth_SendString(heartbeat);
             last_heartbeat = system_tick;
         }
@@ -831,15 +924,31 @@ void Bluetooth_Handler(void)
         // 处理蓝牙命令
         if(bt_command_ready)
         {
-            // 立即确认收到命令
-            Bluetooth_SendString("RECEIVED\r\n");
+            // 简化处理，先确认能接收到命令
+            Bluetooth_SendString("GOT: ");
+            Bluetooth_SendString(bt_command_buffer);
+            Bluetooth_SendString("\r\n");
             
-            // 处理命令
-            Bluetooth_ParseCommand(bt_command_buffer);
+            // 简单的命令处理
+            if(bt_command_buffer[0] == '1')
+            {
+                Bluetooth_SendString("CMD1: OK\r\n");
+            }
+            else if(bt_command_buffer[0] == '9')
+            {
+                Bluetooth_SendString("STATUS: BT Working\r\n");
+            }
+            else
+            {
+                Bluetooth_SendString("UNKNOWN\r\n");
+            }
             
             // 清空缓冲区
             memset(bt_command_buffer, 0, BT_CMD_BUFFER_SIZE);
             bt_command_ready = 0;
+            
+            // 更新计数
+            bt_state.command_count++;
         }
     }
 #endif
@@ -857,9 +966,21 @@ int main(void)
     // 主循环
     while(1)
     {
-        // LED闪烁指示系统运行
-        if(system_tick % 1000 == 0)
+        // 强制蓝牙测试 - 每秒发送一次测试消息
+        static uint32_t last_bt_test = 0;
+        if(system_tick - last_bt_test >= 1000)
         {
+            last_bt_test = system_tick;
+            char test_msg[30];
+            sprintf(test_msg, "TEST: %ld\r\n", system_tick / 1000);
+            Bluetooth_SendString(test_msg);
+        }
+        
+        // LED闪烁指示系统运行  
+        static uint32_t last_led_toggle = 0;
+        if(system_tick - last_led_toggle >= 1000)
+        {
+            last_led_toggle = system_tick;
             Led_Toggle(LED0);
         }
         
@@ -878,10 +999,7 @@ int main(void)
         // 显示更新
         Display_Update();
         
-        // 主循环延时
-        Mdelay_Lib(10);  // 10ms延时，降低CPU占用
-        
-        // 更新系统时钟
-        system_tick += 10;
+        // 不再使用阻塞延时，让程序快速循环
+        // 时钟由SysTick中断自动更新
     }
 }

@@ -23,9 +23,12 @@ void Bluetooth_Init(void)
     memset(bt_recv_buffer, 0, sizeof(bt_recv_buffer));
     bt_recv_index = 0;
     
-    // 发送初始化完成消息
-    Bluetooth_SendString("BT Ready! Use: CMD:VALUE\r\n");
-    Bluetooth_SendString("TH:30 TL:20 HH:70 HL:40 LL:40 SH:150\r\n");
+    // 发送初始化完成消息和命令帮助
+    Bluetooth_SendString("=== STM32 Smart Agriculture System ===\r\n");
+    Bluetooth_SendString("Commands: 1-6(Set Thresholds) 7(Enable&Test) 8(Disable) 9(Status) 0(Reset)\r\n");
+    Bluetooth_SendString("1-TempH35 2-TempL15 3-HumiH80 4-HumiL30 5-LightL30 6-SmokeH200\r\n");
+    Bluetooth_SendString("7-EnableAlarm 8-DisableAlarm 9-Status 0-ResetDefaults\r\n");
+    Bluetooth_SendString("Ready for Commands!\r\n");
 }
 
 /**

@@ -1,26 +1,34 @@
 #include "delay.h"
 
 static volatile int mdelay_time;  // 添加volatile关键字防止编译器优化
+extern volatile uint32_t system_tick;  // 引用main.c中的系统时钟
 
 void SysTick_Handler(void)
 {
-	
-	if(mdelay_time > 0)
-	{
-		mdelay_time--;
-	}
-
+    // 更新延时计数器
+    if(mdelay_time > 0)
+    {
+        mdelay_time--;
+    }
+    
+    // 同时更新系统时钟
+    system_tick++;
 }
 /*
-    利用固件库控制SysTick定时器实现的毫秒级别的延时函数
+    利用已配置的SysTick定时器实现的毫秒级别的延时函数
+    注意：SysTick应该已经在main.c中配置为1ms中断
 */
 void Mdelay_Lib(int nms)
 {
-    //配置SysTick定时器让其一毫秒产生一次中断
-    SysTick_Config(SystemCoreClock/1000);
-
-    //让SysTick中断优先级为0(最高级)
-    NVIC_SetPriority (SysTick_IRQn,0);
+    // 如果SysTick还没有配置，则配置它
+    // 否则直接使用已有的配置
+    if(SysTick->CTRL == 0)
+    {
+        //配置SysTick定时器让其一毫秒产生一次中断
+        SysTick_Config(SystemCoreClock/1000);
+        //让SysTick中断优先级为0(最高级)
+        NVIC_SetPriority (SysTick_IRQn,0);
+    }
 
     //设置好后,此时SysTick每一毫秒产生一次中断mdelay_time就减1
     mdelay_time = nms;
