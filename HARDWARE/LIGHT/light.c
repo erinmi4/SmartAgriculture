@@ -21,11 +21,14 @@ void Light_Init(void)
     GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_NOPULL;    // 不上拉不下拉
     GPIO_Init(LIGHT_GPIO_PORT, &GPIO_InitStructure);
     
-    // 初始化ADC3
-    Adc3_Init(); // <--- 已修改: 调用 Adc3_Init()
+    // 初始化ADC3 - 注意：在system_init中已经初始化过，这里可以不用重复
+    // Adc3_Init();
     
     // 短暂延时等待ADC稳定
     Mdelay_Lib(20);
+    
+    // 读取一次以确保ADC正常工作
+    Light_GetRawValue();
 }
 
 /**

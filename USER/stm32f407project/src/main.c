@@ -2,7 +2,7 @@
 // 如果出现卡死问题，可以逐个禁用模块进行排查
 #define ENABLE_DHT11     1    // 1-启用DHT11, 0-禁用DHT11 (先禁用排查)
 #define ENABLE_MPU6050   0    // 1-启用MPU6050, 0-禁用MPU6050 (先禁用排查)
-#define ENABLE_MQ2       0    // 1-启用MQ2, 0-禁用MQ2  
+#define ENABLE_MQ2       1    // 1-启用MQ2, 0-禁用MQ2  
 #define ENABLE_LIGHT     1    // 1-启用光敏电阻, 0-禁用光敏电阻
 
 /* =================== 头文件包含 =================== */
@@ -226,6 +226,13 @@ void Sensors_Init(void)
     lcd_print_str(1, 0, "Light Sensor...");
     Light_Init();
     Mdelay_Lib(500);
+    
+    // 测试光敏电阻读取
+    uint16_t test_light_raw = Light_GetRawValue();
+    uint8_t test_light_percent = 100 - (test_light_raw * 100 / 4095);
+    sprintf(str, "Light: %d (%d%%)", test_light_raw, test_light_percent);
+    lcd_print_str(1, 0, str);
+    Mdelay_Lib(1000);
 #endif
 
 #if ENABLE_MQ2
@@ -310,8 +317,16 @@ void Data_Collection(void)
 
 #if ENABLE_LIGHT
         // 光照数据采集
-        sensor_data.light_raw_value = Light_GetRawValue();
+        uint16_t raw_light = Light_GetRawValue();
+        // 如果读取到的值为0，尝试再读取一次
+        if(raw_light == 0) {
+            Mdelay_Lib(10);
+            raw_light = Light_GetRawValue();
+        }
+        
+        sensor_data.light_raw_value = raw_light;
         if(sensor_data.light_raw_value > 4095) sensor_data.light_raw_value = 4095;
+        // 光照百分比：ADC值是反的，值越小表示光照越强
         sensor_data.light_percent = 100 - (sensor_data.light_raw_value * 100 / 4095);
 #else
         sensor_data.light_raw_value = 2048;
@@ -530,7 +545,7 @@ void Display_Update(void)
             if(system_tick - last_switch >= 3000)
             {
                 last_switch = system_tick;
-                debug_mode = (debug_mode + 1) % 3;
+                debug_mode = (debug_mode + 1) % 4;
             }
             
             switch(debug_mode)
@@ -543,7 +558,12 @@ void Display_Update(void)
                     sprintf(str, "MQ2:%dppm Ready:%d", 
                             sensor_data.smoke_ppm_value, MQ2_IsDataReady());
                     break;
-                case 2: // 显示传感器状态
+                case 2: // 显示光照传感器状态
+                    sprintf(str, "Light:%d (Raw:%d)", 
+                            sensor_data.light_percent,
+                            sensor_data.light_raw_value);
+                    break;
+                case 3: // 显示传感器状态
                     sprintf(str, "DHT:%d L:%d MQ:%d", 
                             sensor_data.dht11_status,
                             (sensor_data.light_raw_value > 0 ? 1 : 0),

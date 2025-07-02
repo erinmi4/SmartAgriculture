@@ -6,7 +6,7 @@
 /* * 光敏电阻ADC通道定义 (已更正)
  * 根据GEC-M4原理图，光敏传感器连接到 PF7 -> ADC3_IN5
  */
-#define LIGHT_ADC_CHANNEL       ADC_Channel_5 // PF7 -> ADC3_IN5
+#define LIGHT_ADC_CHANNEL       5 // PF7 -> ADC3_IN5
 #define LIGHT_GPIO_PORT         GPIOF               // 使用 GPIOF
 #define LIGHT_GPIO_PIN          GPIO_Pin_7          // 使用 Pin 7
 #define LIGHT_GPIO_CLK          RCC_AHB1Periph_GPIOF
