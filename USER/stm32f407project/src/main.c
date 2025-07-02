@@ -3,7 +3,7 @@
 #define ENABLE_DHT11     0    // 1-启用DHT11, 0-禁用DHT11 (先禁用排查)
 #define ENABLE_MPU6050   0    // 1-启用MPU6050, 0-禁用MPU6050 (先禁用排查)
 #define ENABLE_MQ2       0    // 1-启用MQ2, 0-禁用MQ2  
-#define ENABLE_LIGHT     0    // 1-启用光敏电阻, 0-禁用光敏电阻
+#define ENABLE_LIGHT     1    // 1-启用光敏电阻, 0-禁用光敏电阻
 
 /* =================== 头文件包含 =================== */
 #include "stm32f4xx.h"
