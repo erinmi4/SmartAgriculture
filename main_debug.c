@@ -1,9 +1,9 @@
 /* =================== 调试开关 =================== */
 // 如果出现卡死问题，可以逐个禁用模块进行排查
-#define ENABLE_DHT11     1    // 1-启用DHT11, 0-禁用DHT11 (先禁用排查)
+#define ENABLE_DHT11     0    // 1-启用DHT11, 0-禁用DHT11 (先禁用排查)
 #define ENABLE_MPU6050   0    // 1-启用MPU6050, 0-禁用MPU6050 (先禁用排查)
-#define ENABLE_MQ2       0    // 1-启用MQ2, 0-禁用MQ2  
-#define ENABLE_LIGHT     0    // 1-启用光敏电阻, 0-禁用光敏电阻
+#define ENABLE_MQ2       1    // 1-启用MQ2, 0-禁用MQ2  
+#define ENABLE_LIGHT     1    // 1-启用光敏电阻, 0-禁用光敏电阻
 
 /* =================== 头文件包含 =================== */
 #include "stm32f4xx.h"
@@ -22,21 +22,13 @@
 #include <stdio.h>
 #include <string.h>
 
-/* =================== 缺失函数声明 =================== */
-// 注：实际的函数名在对应的头文件中定义
-// delay_init 不存在，可以删除或创建空函数
-// beep_init -> Beep_Init
-// beep_on -> Beep_On  
-// beep_off -> Beep_Off
-// LED0_Toggle -> Led_Toggle
-
 /* =================== 系统定义 =================== */
-#define TEMP_HIGH_THRESHOLD  29    // 温度高报警阈值(℃)  
+#define TEMP_HIGH_THRESHOLD  30    // 温度高报警阈值(℃)  
 #define TEMP_LOW_THRESHOLD   10    // 温度低报警阈值(℃)
 #define HUMI_HIGH_THRESHOLD  80    // 湿度高报警阈值(%)
 #define HUMI_LOW_THRESHOLD   20    // 湿度低报警阈值(%)
 #define LIGHT_LOW_THRESHOLD  20    // 光照低报警阈值(0-100)
-#define SMOKE_HIGH_THRESHOLD 120    // 烟雾高报警阈值(%)
+#define SMOKE_HIGH_THRESHOLD 30    // 烟雾高报警阈值(%)
 
 // 页面枚举
 typedef enum {
@@ -99,11 +91,13 @@ void Display_Update(void);
 /* =================== 第1步：系统和传感器初始化 =================== */
 void System_Init(void)
 {
+    char str[50];
+    
     // 系统时钟初始化
     SystemInit();
     
-    // 延时初始化 - 删除不存在的delay_init
-    // delay_init(168);  // 168MHz系统时钟
+    // 延时初始化
+    delay_init(168);  // 168MHz系统时钟
     
     // LCD初始化并显示欢迎信息
     lcd_init();
@@ -119,7 +113,7 @@ void System_Init(void)
     Key_Init();
     
     // 蜂鸣器初始化
-    Beep_Init();
+    beep_init();
     
     // ADC初始化
     Adc3_Init();
@@ -131,6 +125,7 @@ void System_Init(void)
 void Sensors_Init(void)
 {
     char str[50];
+    uint8_t init_status = 0;
     
 #if ENABLE_DHT11
     // DHT11初始化
@@ -171,6 +166,7 @@ void Sensors_Init(void)
     if(MPU6050_Init() == 0)
     {
         sensor_data.mpu_status = 1;
+        init_status |= 0x01;
         lcd_print_str(1, 0, "MPU6050 OK");
     }
     else
@@ -283,9 +279,9 @@ void Alarm_Check(void)
     // 蜂鸣器报警
     if(alarm_status.any_alarm)
     {
-        Beep_On();
+        beep_on();
         Mdelay_Lib(100);
-        Beep_Off();
+        beep_off();
     }
 }
 
@@ -377,13 +373,9 @@ void Display_Update(void)
     {
         case PAGE_TEMP_HUMID:
             lcd_print_str(0, 0, "=== Temp/Humid ===");
-            sprintf(str, "T:%dC H:%d%% %s", 
-                    sensor_data.temperature, 
-                    sensor_data.humidity,
-                    alarm_status.temp_high_alarm ? "T-HIGH" : 
-                    (alarm_status.temp_low_alarm ? "T-LOW" : 
-                    (alarm_status.humi_high_alarm ? "H-HIGH" : 
-                    (alarm_status.humi_low_alarm ? "H-LOW" : "OK"))));
+            sprintf(str, "Temp: %d C %s", sensor_data.temperature, 
+                    alarm_status.temp_high_alarm ? "HIGH!" : 
+                    (alarm_status.temp_low_alarm ? "LOW!" : "OK"));
             lcd_print_str(1, 0, str);
             break;
             
@@ -427,7 +419,7 @@ int main(void)
         // LED闪烁指示系统运行
         if(system_tick % 1000 == 0)
         {
-            Led_Toggle(LED0);
+            LED0_Toggle();
         }
         
         // 数据采集

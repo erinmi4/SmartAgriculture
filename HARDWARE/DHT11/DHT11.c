@@ -45,46 +45,56 @@ void dht11_start()
     Udelay_Lib(30);
 }
 
-// 检查DHT11是否响应
+// 检查DHT11是否响应 - 增强超时保护
 unsigned char dht11_check()
 {
     unsigned char n = 0;
     dht11_io_in();
-    while((GPIO_ReadInputDataBit(DHT11_PORT, DHT11_IO) == 1) && n < 100)
+    
+    // 等待高电平结束，增加超时保护
+    while((GPIO_ReadInputDataBit(DHT11_PORT, DHT11_IO) == 1) && n < 200)
     {
         n++;
         Udelay_Lib(1);
     }
-    if(n >= 100)
-        return 1;
-    else 
-        n = 0;
-    while((GPIO_ReadInputDataBit(DHT11_PORT, DHT11_IO) == 0) && n < 100)
+    if(n >= 200)
+        return 1; // 超时失败
+    
+    n = 0;
+    // 等待低电平结束，增加超时保护
+    while((GPIO_ReadInputDataBit(DHT11_PORT, DHT11_IO) == 0) && n < 200)
     {
         n++;
         Udelay_Lib(1);
     }
-    if(n >= 100)
-        return 1;
-    else 
-        return 0;
+    if(n >= 200)
+        return 1; // 超时失败
+    
+    return 0; // 成功
 }
 
-// 读取一个数据位
+// 读取一个数据位 - 增强超时保护
 unsigned char dht11_read_bit()
 {
     unsigned char n = 0;
-    while((GPIO_ReadInputDataBit(DHT11_PORT, DHT11_IO) == 1) && n < 100)
+    
+    // 等待高电平结束
+    while((GPIO_ReadInputDataBit(DHT11_PORT, DHT11_IO) == 1) && n < 200)
     {
         n++;
         Udelay_Lib(1);
     }
+    if(n >= 200) return 0; // 超时返回0
+    
     n = 0;
-    while((GPIO_ReadInputDataBit(DHT11_PORT, DHT11_IO) == 0) && n < 100)
+    // 等待低电平结束
+    while((GPIO_ReadInputDataBit(DHT11_PORT, DHT11_IO) == 0) && n < 200)
     {
         n++;
         Udelay_Lib(1);
     }
+    if(n >= 200) return 0; // 超时返回0
+    
     Udelay_Lib(40);
     if(GPIO_ReadInputDataBit(DHT11_PORT, DHT11_IO) == 1)
         return 1;

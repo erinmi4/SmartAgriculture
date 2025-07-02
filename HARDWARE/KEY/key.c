@@ -70,19 +70,13 @@ void Key_Init(void)
     Key3_Init();
 }
 
-// 按键防抖函数
+// 按键防抖函数 - 非阻塞版本
 uint8_t Key_Debounce(GPIO_TypeDef* GPIOx, uint16_t GPIO_Pin)
 {
+    // 简单的按键检测，不使用阻塞延时
     if (GPIO_ReadInputDataBit(GPIOx, GPIO_Pin) == Bit_RESET) // 判断是否按下
     {
-        for (int i = 0; i < 10000; i++) // 延时
-        {
-            __NOP(); // 空操作
-        }
-        if (GPIO_ReadInputDataBit(GPIOx, GPIO_Pin) == Bit_RESET) // 再次判断是否按下
-        {
-            return 1; // 确认按下
-        }
+        return 1; // 按下
     }
     return 0; // 未按下
 }

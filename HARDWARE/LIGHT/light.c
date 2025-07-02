@@ -40,7 +40,7 @@ uint16_t Light_GetRawValue(void)
 }
 
 /**
- * @brief  获取光敏电阻值(多次采样平均，0-100范围)
+ * @brief  获取光敏电阻值 (多次采样平均，0-100范围)
  * @param  None
  * @retval 光照强度值 (0-100，0最暗，100最亮)
  */
@@ -48,38 +48,27 @@ uint8_t Light_GetValue(void)
 {
     uint32_t temp_val = 0;
     uint8_t t;
-    
+
     // 多次采样取平均值，提高稳定性
     for(t = 0; t < LSENS_READ_TIMES; t++)
     {
-        temp_val += Get_Adc3(LIGHT_ADC_CHANNEL); // <--- 已修改: 调用 Get_Adc3()
+        temp_val += Get_Adc3(LIGHT_ADC_CHANNEL); // <--- 调用 ADC 获取函数
         Mdelay_Lib(5);  // 每次采样间隔5ms
     }
-    
+
     temp_val = temp_val / LSENS_READ_TIMES;  // 得到平均值
 
-    // --- 已修改: 增加安全判断，防止计算错误 ---
-    // 检查ADC值是否在有效范围内
-    int range = 4095 * 10 * 2;
-    if(temp_val > range) temp_val = range;
+    // --- 安全判断，防止ADC超出范围 ---
+    if(temp_val > 4095)
+        temp_val = 4095;
 
-    // 线性映射公式：light = 100 - (adc * 100 / 4095)
-    // 光敏电阻特性：光照强 -> 电阻小 -> ADC值小 -> 光照强度高
-    // 光照弱 -> 电阻大 -> ADC值大 -> 光照强度低
-    uint32_t mapped_val = temp_val * 100 / range; // 映射到0-100范围
+    // 线性映射：ADC值小 → 光照强；ADC值大 → 光照弱
+    // light_percent = 100 - (ADC值 / 最大值 * 100)
+    uint8_t light_percent = 100 - (temp_val * 100 / 4095);
 
-    uint8_t light_percent;
-    if (mapped_val >= 100)
-    {
-        light_percent = 0; // ADC值很大(黑暗)，亮度为0
-    }
-    else
-    {
-        light_percent = 100 - mapped_val;
-    }
-    
     return light_percent;
 }
+
 
 /**
  * @brief  获取光照强度等级
