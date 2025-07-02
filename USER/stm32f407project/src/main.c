@@ -597,36 +597,59 @@ int main(void)
 }
 
 /* =================== 用户自定义蓝牙指令处理 =================== */
-// 该函数在 Bluetooth_ProcessCommand() 内部被调用，实现自定义指令扩展
+// 该函数处理所有传感器阈值设置命令
 void UserBluetoothCommandHandler(const char* cmd, const char* value)
 {
     char resp[64];
     uint16_t v = UserBluetoothParseValue(value);
+    
     if(strcmp(cmd, BT_CMD_SET_TEMP_HIGH) == 0) {
-        if(v <= 60) { TEMP_HIGH_THRESHOLD = v; sprintf(resp, "OK: T_High=%d\r\n", v); }
-        else sprintf(resp, "ERR:0-60\r\n");
-    } else if(strcmp(cmd, BT_CMD_SET_TEMP_LOW) == 0) {
-        if(v <= 60) { TEMP_LOW_THRESHOLD = v; sprintf(resp, "OK: T_Low=%d\r\n", v); }
-        else sprintf(resp, "ERR:0-60\r\n");
-    } else if(strcmp(cmd, BT_CMD_SET_HUMI_HIGH) == 0) {
-        if(v <= 100) { HUMI_HIGH_THRESHOLD = v; sprintf(resp, "OK: H_High=%d\r\n", v); }
-        else sprintf(resp, "ERR:0-100\r\n");
-    } else if(strcmp(cmd, BT_CMD_SET_HUMI_LOW) == 0) {
-        if(v <= 100) { HUMI_LOW_THRESHOLD = v; sprintf(resp, "OK: H_Low=%d\r\n", v); }
-        else sprintf(resp, "ERR:0-100\r\n");
-    } else if(strcmp(cmd, BT_CMD_SET_LIGHT_LOW) == 0) {
-        if(v <= 100) { LIGHT_LOW_THRESHOLD = v; sprintf(resp, "OK: Light_Low=%d\r\n", v); }
-        else sprintf(resp, "ERR:0-100\r\n");
-    } else if(strcmp(cmd, BT_CMD_SET_SMOKE_HIGH) == 0) {
-        if(v <= 1000) { SMOKE_HIGH_THRESHOLD = v; sprintf(resp, "OK: Smoke_High=%d\r\n", v); }
-        else sprintf(resp, "ERR:0-1000\r\n");
-    } else if(strcmp(cmd, BT_CMD_SHOW_STATUS) == 0) {
-        Bluetooth_SendStatus(0); // 0:普通状态
-        return;
-    } else {
-        sprintf(resp, "ERR:Unknown CMD\r\n");
+        if(v <= 60) { 
+            TEMP_HIGH_THRESHOLD = v; 
+            sprintf(resp, "OK: Temp High = %d°C\r\n", v); 
+        }
+        else sprintf(resp, "ERR: Range 0-60°C\r\n");
+    } 
+    else if(strcmp(cmd, BT_CMD_SET_TEMP_LOW) == 0) {
+        if(v <= 60) { 
+            TEMP_LOW_THRESHOLD = v; 
+            sprintf(resp, "OK: Temp Low = %d°C\r\n", v); 
+        }
+        else sprintf(resp, "ERR: Range 0-60°C\r\n");
+    } 
+    else if(strcmp(cmd, BT_CMD_SET_HUMI_HIGH) == 0) {
+        if(v <= 100) { 
+            HUMI_HIGH_THRESHOLD = v; 
+            sprintf(resp, "OK: Humidity High = %d%%\r\n", v); 
+        }
+        else sprintf(resp, "ERR: Range 0-100%%\r\n");
+    } 
+    else if(strcmp(cmd, BT_CMD_SET_HUMI_LOW) == 0) {
+        if(v <= 100) { 
+            HUMI_LOW_THRESHOLD = v; 
+            sprintf(resp, "OK: Humidity Low = %d%%\r\n", v); 
+        }
+        else sprintf(resp, "ERR: Range 0-100%%\r\n");
+    } 
+    else if(strcmp(cmd, BT_CMD_SET_LIGHT_LOW) == 0) {
+        if(v <= 100) { 
+            LIGHT_LOW_THRESHOLD = v; 
+            sprintf(resp, "OK: Light Low = %d%%\r\n", v); 
+        }
+        else sprintf(resp, "ERR: Range 0-100%%\r\n");
+    } 
+    else if(strcmp(cmd, BT_CMD_SET_SMOKE_HIGH) == 0) {
+        if(v <= 1000) { 
+            SMOKE_HIGH_THRESHOLD = v; 
+            sprintf(resp, "OK: Smoke High = %dppm\r\n", v); 
+        }
+        else sprintf(resp, "ERR: Range 0-1000ppm\r\n");
+    } 
+    else {
+        sprintf(resp, "ERR: Unknown command '%s'\r\n", cmd);
     }
-    CustomBluetoothSendString(resp);
+    
+    Bluetooth_SendString(resp);
 }
 
 uint16_t UserBluetoothParseValue(const char* str)
@@ -650,31 +673,50 @@ void Custom_Bluetooth_Init(void)
     // 添加延时确保蓝牙模块稳定
     Mdelay_Lib(500);
     
-    // 发送欢迎信息（使用bluetooth.c中的函数）
-    Bluetooth_SendString("Smart Agriculture Ready\r\n");
+    // 发送新的命令说明（替换原来的简单命令）
+    Bluetooth_SendString("\r\n=== Smart Agriculture System ===\r\n");
     Mdelay_Lib(100);
-    Bluetooth_SendString("Commands: 00-06\r\n");
+    Bluetooth_SendString("Extended Commands Available:\r\n");
     Mdelay_Lib(100);
-    Bluetooth_SendString("00=Status, 01-06=Set Thresholds\r\n");
+    Bluetooth_SendString("00 = Show all status\r\n");
     Mdelay_Lib(100);
+    Bluetooth_SendString("01 VALUE = Set temp high threshold\r\n");
+    Mdelay_Lib(100);
+    Bluetooth_SendString("02 VALUE = Set temp low threshold\r\n");
+    Mdelay_Lib(100);
+    Bluetooth_SendString("03 VALUE = Set humidity high threshold\r\n");
+    Mdelay_Lib(100);
+    Bluetooth_SendString("04 VALUE = Set humidity low threshold\r\n");
+    Mdelay_Lib(100);
+    Bluetooth_SendString("05 VALUE = Set light low threshold\r\n");
+    Mdelay_Lib(100);
+    Bluetooth_SendString("06 VALUE = Set smoke high threshold\r\n");
+    Mdelay_Lib(100);
+    Bluetooth_SendString("Example: 01 30 (set temp high to 30C)\r\n");
+    Mdelay_Lib(100);
+    Bluetooth_SendString("=============================\r\n");
 }
 
 // 蓝牙数据处理主函数
 void Bluetooth_Handler(void)
 {
-    // 使用现有的蓝牙接口处理命令
-    // 这里简化处理，只在需要时调用 Bluetooth_ProcessCommand()
     static uint32_t last_bt_check = 0;
     
-    // 每100ms检查一次蓝牙状态
-    if(system_tick - last_bt_check >= 100)
+    // 每50ms检查一次蓝牙状态
+    if(system_tick - last_bt_check >= 50)
     {
         last_bt_check = system_tick;
         
         // 检查是否有命令需要处理
         if(Bluetooth_GetStatus() == BT_STATUS_CMD_READY)
         {
-            // 处理原有的简化命令，然后扩展处理我们的新命令
+            // 获取接收到的完整命令并处理
+            char* received_cmd = Bluetooth_GetReceivedCommand();
+            
+            // 处理我们的扩展命令
+            ProcessReceivedCommand(received_cmd);
+            
+            // 重置蓝牙状态
             Bluetooth_ProcessCommand();
         }
     }
