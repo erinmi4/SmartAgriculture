@@ -1,6 +1,7 @@
 #include "bluetooth.h"
 #include <string.h>
 #include <stdio.h>
+#include <stdarg.h>
 
 /* 蓝牙模块私有变量 */
 static char bt_recv_buffer[64];         // 接收缓冲区
@@ -65,7 +66,10 @@ void Bluetooth_SendData(uint8_t* data, uint16_t len)
  */
 void Bluetooth_ProcessRxData(uint8_t ch)
 {
-    // 处理参数化命令接收
+    // 回显收到的字符
+    Bluetooth_SendData(&ch, 1);
+    
+    // 处理命令接收
     if(ch == '\r' || ch == '\n')
     {
         if(bt_recv_index > 0)
@@ -87,6 +91,11 @@ void Bluetooth_ProcessRxData(uint8_t ch)
     else if(bt_recv_index < sizeof(bt_recv_buffer) - 1)
     {
         bt_recv_buffer[bt_recv_index++] = ch;
+    }
+    else
+    {
+        bt_recv_index = 0;
+        memset(bt_recv_buffer, 0, sizeof(bt_recv_buffer));
     }
 }
 

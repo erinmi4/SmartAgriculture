@@ -15,26 +15,24 @@ void SysTick_Handler(void)
     system_tick++;
 }
 /*
-    利用已配置的SysTick定时器实现的毫秒级别的延时函数
-    注意：SysTick应该已经在main.c中配置为1ms中断
+    毫秒级延时函数 - 修改版，避免干扰现有SysTick配置
 */
 void Mdelay_Lib(int nms)
 {
-    // 如果SysTick还没有配置，则配置它
-    // 否则直接使用已有的配置
-    if(SysTick->CTRL == 0)
+    // 检查SysTick是否已经配置为1ms
+    if(SysTick->LOAD == (SystemCoreClock/1000 - 1))
     {
-        //配置SysTick定时器让其一毫秒产生一次中断
-        SysTick_Config(SystemCoreClock/1000);
-        //让SysTick中断优先级为0(最高级)
-        NVIC_SetPriority (SysTick_IRQn,0);
+        // SysTick已经正确配置为1ms，直接使用system_tick
+        uint32_t start_tick = system_tick;
+        while((system_tick - start_tick) < nms)
+        {
+            __NOP();
+        }
     }
-
-    //设置好后,此时SysTick每一毫秒产生一次中断mdelay_time就减1
-    mdelay_time = nms;
-    while(mdelay_time > 0) {
-        // 等待中断递减mdelay_time，添加空操作防止编译器优化
-        __NOP();
+    else
+    {
+        // 如果SysTick未配置或配置错误，使用软件延时
+        Simple_Delay_Ms(nms);
     }
 }
 
@@ -58,20 +56,16 @@ void Simple_Delay_Ms(uint32_t ms)
 }
 
 /*
-    利用固件库控制SysTick定时器实现的微秒级别的延时函数
+    微秒级延时函数 - 非阻塞版本，不干扰SysTick配置
 */
 void Udelay_Lib(int nms)
 {
-    //配置SysTick定时器让其一微秒产生一次中断
-    SysTick_Config(SystemCoreClock/1000000);
-
-    //让SysTick中断优先级为0(最高级)
-    NVIC_SetPriority (SysTick_IRQn,0);
-
-    //设置好后,此时SysTick每一微秒产生一次中断mdelay_time就减1
-    mdelay_time = nms;
-    while(mdelay_time)
-;
+    // 使用软件延时，避免重新配置SysTick
+    volatile uint32_t count = nms * 42;  // 大约1微秒的循环计数
+    while(count--)
+    {
+        __NOP();
+    }
 }
 
 
