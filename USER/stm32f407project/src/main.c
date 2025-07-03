@@ -243,6 +243,7 @@ void Sensors_Init(void)
     
     // 测试光敏电阻读取
     uint16_t test_light_raw = Light_GetRawValue();
+    //通过一个函数映射将ADC值转换为光照百分比
     uint8_t test_light_percent = 100 - (test_light_raw * 100 / 4095);
     sprintf(str, "Light: %d (%d%%)", test_light_raw, test_light_percent);
     lcd_print_str(1, 0, str);

@@ -365,7 +365,7 @@
               <MiscControls></MiscControls>
               <Define>STM32F40_41xxx,USE_STDPERIPH_DRIVER</Define>
               <Undefine></Undefine>
-              <IncludePath>..\..\CORE;..\..\FWLIB\inc;.\src;..\..\SYSTEM;..\..\HARDWARE\LED;..\..\MiddleWare\EXTI;..\..\HARDWARE\BEEP;..\..\HARDWARE\KEY;..\..\MiddleWare\UART;..\..\HARDWARE\LCD;..\..\HARDWARE\DHT11;..\..\HARDWARE\MQ;..\..\HARDWARE\BLUETOOTH</IncludePath>
+              <IncludePath>..\..\CORE;..\..\FWLIB\inc;.\src;..\..\SYSTEM;..\..\HARDWARE\LED;..\..\MiddleWare\EXTI;..\..\HARDWARE\BEEP;..\..\HARDWARE\KEY;..\..\MiddleWare\UART;..\..\HARDWARE\LCD;..\..\HARDWARE\DHT11;..\..\HARDWARE\MQ;..\..\HARDWARE\BLUETOOTH;..\..\MiddleWare\ADC;..\..\HARDWARE\LIGHT;..\..\MiddleWare\IIC;..\..\HARDWARE\mpu6050</IncludePath>
             </VariousControls>
           </Cads>
           <Aads>
@@ -918,6 +918,26 @@
               <FileType>5</FileType>
               <FilePath>..\..\HARDWARE\BLUETOOTH\bluetooth.h</FilePath>
             </File>
+            <File>
+              <FileName>light.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\HARDWARE\LIGHT\light.c</FilePath>
+            </File>
+            <File>
+              <FileName>light.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\HARDWARE\LIGHT\light.h</FilePath>
+            </File>
+            <File>
+              <FileName>mpu6050.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\HARDWARE\mpu6050\mpu6050.c</FilePath>
+            </File>
+            <File>
+              <FileName>mpu6050.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\HARDWARE\mpu6050\mpu6050.h</FilePath>
+            </File>
           </Files>
         </Group>
         <Group>
@@ -942,6 +962,36 @@
               <FileName>uart.h</FileName>
               <FileType>5</FileType>
               <FilePath>..\..\MiddleWare\UART\uart.h</FilePath>
+            </File>
+            <File>
+              <FileName>ADC3.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\MiddleWare\ADC\ADC3.c</FilePath>
+            </File>
+            <File>
+              <FileName>ADC3.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\MiddleWare\ADC\ADC3.h</FilePath>
+            </File>
+            <File>
+              <FileName>adc1.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\MiddleWare\ADC\adc1.c</FilePath>
+            </File>
+            <File>
+              <FileName>adc1.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\MiddleWare\ADC\adc1.h</FilePath>
+            </File>
+            <File>
+              <FileName>I2C.h</FileName>
+              <FileType>5</FileType>
+              <FilePath>..\..\MiddleWare\IIC\I2C.h</FilePath>
+            </File>
+            <File>
+              <FileName>i2c.c</FileName>
+              <FileType>1</FileType>
+              <FilePath>..\..\MiddleWare\IIC\i2c.c</FilePath>
             </File>
           </Files>
         </Group>
